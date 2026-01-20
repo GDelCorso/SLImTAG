@@ -10,4 +10,5 @@ customtkinter==5.2.2
 
 # Torch and SAM (Segment anything model)
 torch==2.5.1
+torchvision==0.20.1
 segment-anything==1.0
