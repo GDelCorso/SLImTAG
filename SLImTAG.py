@@ -1,5 +1,5 @@
 '''
-EasyTAG gui. Version 1.0
+SLImTAG gui. Version 1.0
 
 01/20/2026
 
@@ -750,4 +750,5 @@ class SegmentationApp(ctk.CTk):
 
 #%% Main cycle
 if __name__ == "__main__":
+
     SegmentationApp().mainloop()
