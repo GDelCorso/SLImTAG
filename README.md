@@ -34,6 +34,8 @@
 - Segment Anything Model (SAM) weights == 1.0
 
 > Download SAM model weights and place in `models/` directory: `sam_vit_b_01ec64.pth`  
+https://github.com/facebookresearch/segment-anything
+
 
 Install dependencies:
 
@@ -43,8 +45,8 @@ pip install -r requirements.txt
 
 ## Installation
 ```bash
-git clone <repo-url>
-cd EasyTAG
+git clone https://github.com/GDelCorso/SLImTAG
+cd SLImTAG
 ```
 
 ---
