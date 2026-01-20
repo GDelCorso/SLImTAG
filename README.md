@@ -45,6 +45,8 @@ git clone <repo-url>
 cd EasyTAG
 ```
 
+---
+
 ## Usage
 ### Buttons
 | Button / Tool           | Description                        | Shortcut |
@@ -56,6 +58,7 @@ cd EasyTAG
 | **Undo**                | Undo last change                   | Z        |
 | **Add New Mask**        | Create a new mask with custom name | –        |
 
+---
 
 ### Mouse Actions
 
@@ -66,6 +69,8 @@ Right Click – Remove or erode depending on active tool.
 Drag – Brush painting follows mouse movement.
 
 Mouse Wheel – Zoom in/out of the image.
+
+---
 
 ### Saving & Loading Masks
 Save Mask: Saves .npy and a semi-transparent PNG overlay of the masks.
