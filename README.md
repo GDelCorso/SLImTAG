@@ -23,7 +23,7 @@
 
 ## Requirements
 
-- Python ≥ 3.9  
+- Python == 3.12
 
 - PyTorch == torch 2.5.1 (CUDA 12.1 recommended if available)
 
