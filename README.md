@@ -1,9 +1,10 @@
-# NOME – Interactive Image Segmentation Tool
+# SLImTAG – *S*imple *L*ight-weight *Im*age *Tag*ging tool
+ 
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**EasyTAG** is a simple and intuitive GUI tool for interactive image segmentation using brushes, connected components, magic wand, and SAM (Segment Anything Model). It supports multiple masks with color previews, undo, and easy saving/loading of masks.
+**SLImTAG** is a simple and intuitive GUI tool for interactive image segmentation using brushes, connected components, magic wand, and SAM (Segment Anything Model). It supports multiple masks with color previews, undo, and easy saving/loading of masks.
 
 ---
 
@@ -23,13 +24,14 @@
 ## Requirements
 
 - Python ≥ 3.9  
-- PyTorch  
-- NumPy  
-- SciPy  
-- Pillow  
-- Tkinter  
-- CustomTkinter (`pip install customtkinter`)  
-- Segment Anything Model (SAM) weights  
+
+- PyTorch == torch 2.5.1 (CUDA 12.1 recommended if available)
+
+- NumPy == 2.3.1
+- SciPy == 1.17.0
+- Pillow == 12.0.0
+- CustomTkinter == 5.2.2
+- Segment Anything Model (SAM) weights == 1.0
 
 > Download SAM model weights and place in `models/` directory: `sam_vit_b_01ec64.pth`  
 
