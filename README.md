@@ -73,6 +73,7 @@ Right Click – Remove or erode depending on active tool.
 Drag – Brush painting follows mouse movement.
 
 Mouse Wheel – Zoom in/out of the image.
+CTRL+ - Zoom in and CTRL- - Zoom out.
 
 ---
 
