@@ -9,15 +9,14 @@
 
 ## Features
 
-- Add, select, and delete up to **20 masks**.
+- Add, select, and delete multiple tasks
 - Brush tool for manual painting.
 - Magic Wand (SAM) for AI-assisted segmentation.
 - Connected Component tool for precise selection/removal.
 - Smoothing tool (dilation/erosion) for mask refinement.
 - Undo support with **Z shortcut**.
-- Save masks as `.npy` and overlay PNG images.
-- Load masks from `.npy` or PNG files.
-- Shortcut keys for all tools.
+- Save masks and load masks
+- Minimal libraries requirements
 
 ---
 
@@ -38,3 +37,10 @@ Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+## Installation
+```bash
+git clone <repo-url>
+cd EasyTAG
+```
