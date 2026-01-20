@@ -46,7 +46,7 @@ cd EasyTAG
 ```
 
 ## Usage
-# Buttons
+### Buttons
 | Button / Tool           | Description                        | Shortcut |
 | ----------------------- | ---------------------------------- | -------- |
 | **Brush**               | Paint or erase manually            | B        |
@@ -57,7 +57,7 @@ cd EasyTAG
 | **Add New Mask**        | Create a new mask with custom name | –        |
 
 
-# Mouse Actions
+### Mouse Actions
 
 Left Click – Apply active tool (Shift modifies behavior for some tools).
 
@@ -67,7 +67,7 @@ Drag – Brush painting follows mouse movement.
 
 Mouse Wheel – Zoom in/out of the image.
 
-# Saving & Loading Masks
+### Saving & Loading Masks
 Save Mask: Saves .npy and a semi-transparent PNG overlay of the masks.
 
 Load Mask: Loads .npy or .png. If PNG, extracts up to 20 unique colors as separate masks. Extra colors are ignored.
