@@ -109,6 +109,8 @@ class SegmentationApp(ctk.CTk):
         self.magic_mode = False
         self.cc_mode = False 
         self.smoothing_active = False  # nuovo stato
+        
+        self.last_brush_pos = None
 
         self.brush_size = 30
         self.undo_stack = []
@@ -190,6 +192,7 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<Button-1>", self.on_canvas_left)
         self.canvas.bind("<Button-3>", self.on_canvas_right)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
         self.bind("<Control-plus>", self.zoom_in_keyboard)
@@ -537,13 +540,16 @@ class SegmentationApp(ctk.CTk):
         to modify behavior.
         '''
         shift_pressed = (e.state & 0x0001) != 0  
+        
+        self._prev_brush_pos = None
+        
         if self.smoothing_active:
             y = int((e.y - self.offset_y)/self.display_scale)
             x = int((e.x - self.offset_x)/self.display_scale)
             op = "erosion" if shift_pressed else "dilation"
             self.apply_smoothing(y, x, operation=op)
             return "break"
-    
+        
         if self.cc_mode:
             self.connected_component_click(e, remove_only=not shift_pressed)
             return "break"
@@ -551,8 +557,16 @@ class SegmentationApp(ctk.CTk):
             self.sam_click(e, add=not shift_pressed)
             return "break"
         if self.brush_active:
-            self.brush(e, add=not shift_pressed)
+            self.brush_at(int((e.x - self.offset_x)/self.display_scale),
+                          int((e.y - self.offset_y)/self.display_scale),
+                          add=not shift_pressed)
+            self.push_undo()  
+            self.update_display()
             return "break"
+        
+        
+    def on_canvas_left_release(self, e):
+        self.last_brush_pos = None
 
     
     def on_canvas_right(self, e):
@@ -585,8 +599,57 @@ class SegmentationApp(ctk.CTk):
         '''
         if not self.brush_active or self.cc_mode:
             return
+        
         shift_pressed = (e.state & 0x0001) != 0
-        self.brush(e, add=not shift_pressed)
+        
+        x1 = int((e.x - self.offset_x) / self.display_scale)
+        y1 = int((e.y - self.offset_y) / self.display_scale)
+        
+        if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
+            self._prev_brush_pos = (x1, y1)
+            self.push_undo()  
+            self.brush_at(x1, y1, add=not shift_pressed)
+            self.update_display()
+            return
+        
+        x0, y0 = self._prev_brush_pos
+        dx = x1 - x0
+        dy = y1 - y0
+        dist = max(1, int(np.hypot(dx, dy)))
+        
+        r = max(1, self.brush_size // 2)
+        step = max(1, r // 5)
+        
+        for i in range(0, dist + 1, step):
+            xi = int(x0 + dx * i / dist)
+            yi = int(y0 + dy * i / dist)
+            self.brush_at(xi, yi, add=not shift_pressed)
+        
+        self.update_display()
+        self._prev_brush_pos = (x1, y1)
+
+
+    def brush_at(self, x, y, add=True):
+        '''
+        Aux method to define brush position without updating display or undo.
+        '''
+        if self.mask_orig is None or self.active_mask_id is None:
+                return
+        
+        r = self.brush_size // 2
+        buffer = max(1, r // 2)
+    
+        y0, y1 = max(0, y - r - buffer), min(self.mask_orig.shape[0], y + r + buffer)
+        x0, x1 = max(0, x - r - buffer), min(self.mask_orig.shape[1], x + r + buffer)
+    
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        circle = (yy - y)**2 + (xx - x)**2 <= r*r
+    
+        if add:
+            self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
+        else:
+            erase_mask = circle & (self.mask_orig[y0:y1, x0:x1] == self.active_mask_id)
+            self.mask_orig[y0:y1, x0:x1][erase_mask] = 0
 
 
     def zoom_evt(self,e):
