@@ -19,7 +19,7 @@ from PIL import Image, ImageTk
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk                 
-from tkinter import filedialog, ttk  
+from tkinter import filedialog, ttk, simpledialog
 import customtkinter as ctk    
 
 # Torch and SAM (Segment anything model)
@@ -125,8 +125,8 @@ class SegmentationApp(ctk.CTk):
 
 
         # Mask controls
-        self.new_label = ctk.CTkEntry(self.panel, placeholder_text="Mask name")
-        self.new_label.pack(padx=10, pady=5, fill="x")
+        # self.new_label = ctk.CTkEntry(self.panel, placeholder_text="Mask name")
+        # self.new_label.pack(padx=10, pady=5, fill="x")
         ctk.CTkButton(self.panel, text="Add new mask", 
                                  command=self.add_mask).pack(fill="x", padx=10)
         
@@ -305,19 +305,27 @@ class SegmentationApp(ctk.CTk):
     # MASK MANAGEMENT ---------------------------------------------------------
     def add_mask(self):
         '''
-        Creates a new mask, assigns it a unique ID and a color, and updates the 
-        UI accordingly.
+        Creates a new mask, asks the user for a name via dialog, assigns it a 
+        unique ID and a color, and updates the UI accordingly.
         '''
         self.deactivate_tools()
-        if len(self.mask_labels) >= MAX_MASKS: return
+        if len(self.mask_labels) >= MAX_MASKS: 
+            return
+        
+        # Ask user for mask name
+        name = simpledialog.askstring("New Mask", 
+                                                "Enter name for the new mask:")
+        if not name:  # User cancelled or empty
+            return
+        
         mid = max(self.mask_labels.keys(), default=0) + 1
-        self.mask_labels[mid] = self.new_label.get()
+        self.mask_labels[mid] = name
         self.mask_colors[mid] = HIGH_CONTRAST_COLORS[mid-1]
         self.active_mask_id = mid
         self.combo["values"] = [f"{i}:{l}" for i,l in self.mask_labels.items()]
         self.combo.current(len(self.mask_labels)-1)
-        self.new_label.delete(0,"end")
         self.update_mask_color_preview()
+
 
 
     def change_mask(self,e):
@@ -571,8 +579,9 @@ class SegmentationApp(ctk.CTk):
 
     def on_canvas_drag(self, e):
         '''
-        Updates the brush continuously while dragging the mouse, respecting 
-        Shift for additive or subtractive painting.
+        Updates the brush continuously while dragging the mouse.
+        Draws one circle per event, using add/subtract depending on Shift.
+        No interpolation between points to avoid undesired smoothing.
         '''
         if not self.brush_active or self.cc_mode:
             return
@@ -608,28 +617,36 @@ class SegmentationApp(ctk.CTk):
 
     #%% MASKING TECHNIQUES ----------------------------------------------------
     # BRUSH -------------------------------------------------------------------
-    def brush(self,e, add=True):
+    def brush(self, e, add=True):
         '''
         Paints or erases a circular area on the active mask at the mouse 
         position, saving the previous state for undo and updating the display.
         '''
-        if self.mask_orig is None or self.active_mask_id is None: return
+        if self.mask_orig is None or self.active_mask_id is None:
+            return
         self.push_undo()
-        x = int((e.x-self.offset_x)/self.display_scale)
-        y = int((e.y-self.offset_y)/self.display_scale)
-        r = self.brush_size//2
-        y0,y1 = max(0,y-r), min(self.mask_orig.shape[0], y+r)
-        x0,x1 = max(0,x-r), min(self.mask_orig.shape[1], x+r)
-        yy,xx = np.ogrid[y0:y1, x0:x1]
+    
+        # Mouse position in image coordinates
+        x = int((e.x - self.offset_x) / self.display_scale)
+        y = int((e.y - self.offset_y) / self.display_scale)
+        r = self.brush_size // 2
+    
+        # Extend bounding box slightly to avoid gaps
+        buffer = max(1, r // 2)
+        y0, y1 = max(0, y - r - buffer), min(self.mask_orig.shape[0], y + r + buffer)
+        x0, x1 = max(0, x - r - buffer), min(self.mask_orig.shape[1], x + r + buffer)
+    
+        # Create circular mask
+        yy, xx = np.ogrid[y0:y1, x0:x1]
         circle = (yy - y)**2 + (xx - x)**2 <= r*r
-
+    
         if add:
-            self.mask_orig[y0:y1,x0:x1][circle] = self.active_mask_id
+            self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
         else:
             erase_mask = circle & (self.mask_orig[y0:y1, x0:x1] == self.active_mask_id)
             self.mask_orig[y0:y1, x0:x1][erase_mask] = 0
-
-        self.update_display()
+    
+        self.update_display()    
 
 
     def draw_brush_preview(self,e):
