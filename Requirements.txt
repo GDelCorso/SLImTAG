@@ -1,0 +1,13 @@
+# Core scientific stack
+numpy==2.3.1
+scipy==1.17.0
+
+# Image handling
+pillow==12.0.0
+
+# TkInter and CustomTkInter GUI
+customtkinter==5.2.2
+
+# Torch and SAM (Segment anything model)
+torch==2.5.1
+segment-anything==1.0
