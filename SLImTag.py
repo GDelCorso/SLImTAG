@@ -811,13 +811,16 @@ class SegmentationApp(ctk.CTk):
         Adjusts the zoom level of the displayed image based on mouse wheel 
         input and refreshes the display.
         '''
-        # Check if an image is loaded
-        if not self.require_image():
-            return
+        # # Check if an image is loaded
+        # if not self.require_image():
+        #     return
         
-        self.zoom *= 1.1 if e.delta>0 else 0.9
-        self.update_display()
-        
+        # self.zoom *= 1.1 if e.delta>0 else 0.9
+        # self.update_display()
+        if e.delta > 0:
+            self.zoom_in(e)
+        else:
+            self.zoom_out(e)
         
     def zoom_in(self, e=None):
         '''
