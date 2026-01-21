@@ -788,7 +788,7 @@ class SegmentationApp(ctk.CTk):
         Aux method to define brush position without updating display or undo.
         '''
         if self.mask_orig is None or self.active_mask_id is None:
-                return
+            return
         
         r = self.brush_size // 2
         buffer = max(1, r // 2)
@@ -800,7 +800,11 @@ class SegmentationApp(ctk.CTk):
         circle = (yy - y)**2 + (xx - x)**2 <= r*r
     
         if add:
-            self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
+            if self.only_on_empty.get():
+                mask_area = self.mask_orig[y0:y1, x0:x1]
+                mask_area[circle & (mask_area==0)] = self.active_mask_id
+            else:
+                self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
         else:
             erase_mask = circle & (self.mask_orig[y0:y1, x0:x1] == self.active_mask_id)
             self.mask_orig[y0:y1, x0:x1][erase_mask] = 0
