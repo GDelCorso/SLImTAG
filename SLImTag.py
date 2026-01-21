@@ -19,7 +19,7 @@ from PIL import Image, ImageTk
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk                 
-from tkinter import filedialog, ttk, simpledialog
+from tkinter import filedialog, ttk, simpledialog, messagebox
 import customtkinter as ctk    
 
 # Torch and SAM (Segment anything model)
@@ -97,6 +97,8 @@ class SegmentationApp(ctk.CTk):
         self.image_orig = None
         self.mask_orig = None
         self.mask_disp = None
+        
+        # Define the zoom status
         self.zoom = 1.0
         self.offset_x = 0
         self.offset_y = 0
@@ -177,6 +179,10 @@ class SegmentationApp(ctk.CTk):
                                                    command=self.toggle_cc_mode)
         self.cc_btn.pack(fill="x", padx=10)
         self.cc_btn.configure(fg_color=TOOL_OFF_COLOR)
+        
+        self.all_action_buttons = [self.brush_btn, self.magic_btn, self.cc_btn, 
+                                                            self.smoothing_btn]
+        self.set_controls_state(False) # Deactivate all buttons
 
 
         # SAM -----------------------------------------------------------------
@@ -196,7 +202,8 @@ class SegmentationApp(ctk.CTk):
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
         self.bind("<Control-plus>", self.zoom_in_keyboard)
-        self.bind("<Control-equal>", self.zoom_in_keyboard)  
+        self.bind("<Control-equal>", self.reset_zoom)  
+        self.bind("<Control-space>", self.reset_zoom)
         self.bind("<Control-minus>", self.zoom_out_keyboard)
         
         
@@ -280,6 +287,26 @@ class SegmentationApp(ctk.CTk):
         self.cc_mode = False
         self.smoothing_active = False
         self.update_button_colors()
+        
+        
+    def require_image(self):
+        '''
+        Warning message if no image has been load.
+        '''
+        if self.image_orig is None:
+            messagebox.showwarning("Warning", "Load image before")
+            return False
+        return True
+
+
+    def set_controls_state(self, enabled: bool):
+        '''
+        Enable/disable all buttons.
+        '''
+        state = "normal" if enabled else "disabled"
+        for b in self.all_action_buttons:
+            b.configure(state=state)
+
 
 
     
@@ -300,6 +327,10 @@ class SegmentationApp(ctk.CTk):
         current mask_orig. Calls update_display() to refresh the canvas so the 
         user sees the previous mask.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         if self.undo_stack:
             self.mask_orig = self.undo_stack.pop()
             self.update_display()
@@ -311,6 +342,10 @@ class SegmentationApp(ctk.CTk):
         Creates a new mask, asks the user for a name via dialog, assigns it a 
         unique ID and a color, and updates the UI accordingly.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         self.deactivate_tools()
         if len(self.mask_labels) >= MAX_MASKS: 
             return
@@ -351,6 +386,10 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the brush tool and updates the button colors 
         and mask preview.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         if not self.brush_active:
             self.deactivate_tools()
             self.brush_active = True
@@ -365,6 +404,10 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the connected component tool and refreshes the 
         UI to reflect its state.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         if not self.cc_mode:
             self.deactivate_tools()
             self.cc_mode = True
@@ -379,6 +422,10 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the magic wand tool and updates the button 
         colors and mask preview accordingly.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         if not self.magic_mode:
             self.deactivate_tools()
             self.magic_mode = True
@@ -393,6 +440,10 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the smoothing tool and updates the interface 
         to show its current status.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         if not self.smoothing_active:
             self.deactivate_tools()
             self.smoothing_active = True
@@ -415,121 +466,135 @@ class SegmentationApp(ctk.CTk):
         self.mask_orig = np.zeros(self.image_orig.size[::-1], np.uint8)
         self.sam.set_image(np.array(self.image_orig))
           
+        self.set_controls_state(True)
         self.update_display()
         
 
     def load_mask(self):
-        '''
-        Upload an existing mask (png or numpy). It can handles arbitrary pngs
-        with a maximum of MAX_MASKS non zero values. All subsequent values are 
-        dropped. 
-        '''
+        """
+        Upload an existing mask
+        - Indexed PNG (mode "P"): direct recovery of mask indices.
+        - RGB PNG: legacy color-based reconstruction.
+        """
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+    
         self.deactivate_tools()
-        p = filedialog.askopenfilename(filetypes=[("NumPy or PNG", "*.npy *.png")])
+    
+        p = filedialog.askopenfilename(
+            filetypes=[("IndexedPNG or PNG", "*.png")]
+        )
         if not p:
             return
     
         self.push_undo()
     
-        ext = p.split(".")[-1].lower()
+        ext = os.path.splitext(p)[1].lower()
+    
         self.mask_labels.clear()
         self.mask_colors.clear()
+        self.active_mask_id = None
     
-        if ext == "npy":
-            mask = np.load(p)
-            self.mask_orig = mask.copy()
-            labels = np.unique(mask)
-            labels = labels[labels != 0]
-            for i, l in enumerate(labels[:20], 1):
-                self.mask_labels[l] = f"mask_{i}"
-                self.mask_colors[l] = HIGH_CONTRAST_COLORS[i-1]
-            self.active_mask_id = labels[0] if len(labels) > 0 else None
+        if ext == ".png":
+            img = Image.open(p)
     
-        elif ext == "png":
-            img = Image.open(p).convert("RGB")
-            arr = np.array(img)
-            h, w, _ = arr.shape
+            # CASE 1: Indexed PNG (preferred)
+            if img.mode == "P":
+                arr = np.array(img, dtype=np.uint8)
+                self.mask_orig = arr.copy()
     
-            # Identifies unique colors
-            arr_flat = arr.reshape(-1, 3)
-            arr_flat_nonblack = arr_flat[~np.all(arr_flat == 0, axis=1)]
-            if len(arr_flat_nonblack) == 0:
-                self.mask_orig = np.zeros((h, w), np.uint8)
-                return
+                labels = np.unique(arr)
+                labels = labels[labels != 0][:MAX_MASKS]
     
-            # Select the first MAX_MASKS
-            unique_colors = []
-            seen = set()
-            for color in arr_flat_nonblack:
-                t = tuple(color)
-                if t not in seen:
-                    seen.add(t)
-                    unique_colors.append(t)
-                    if len(unique_colors) >= 20:
-                        break
+                palette = img.getpalette()  # flat list [R,G,B,...]
     
-            mask = np.zeros((h, w), np.uint8)
-            for i, color in enumerate(unique_colors, 1):
-                mask[np.all(arr == color, axis=-1)] = i
-                self.mask_labels[i] = f"mask_{i}"
-                self.mask_colors[i] = color
+                for l in labels:
+                    self.mask_labels[l] = f"mask_{l}"
+                    idx = l * 3
+                    self.mask_colors[l] = tuple(palette[idx:idx+3])
     
-            self.mask_orig = mask
-            self.active_mask_id = 1 if unique_colors else None
+                self.active_mask_id = labels[0] if len(labels) > 0 else None
     
-        # Update combo box
+            # CASE 2: Generic RGB PNG
+            else:
+                img = img.convert("RGB")
+                arr = np.array(img)
+                h, w, _ = arr.shape
+    
+                arr_flat = arr.reshape(-1, 3)
+                arr_flat_nonblack = arr_flat[
+                    ~np.all(arr_flat == 0, axis=1)
+                ]
+    
+                if len(arr_flat_nonblack) == 0:
+                    self.mask_orig = np.zeros((h, w), np.uint8)
+                    return
+    
+                unique_colors = []
+                seen = set()
+                for color in arr_flat_nonblack:
+                    t = tuple(color)
+                    if t not in seen:
+                        seen.add(t)
+                        unique_colors.append(t)
+                        if len(unique_colors) >= MAX_MASKS:
+                            break
+    
+                mask = np.zeros((h, w), np.uint8)
+                for i, color in enumerate(unique_colors, 1):
+                    mask[np.all(arr == color, axis=-1)] = i
+                    self.mask_labels[i] = f"mask_{i}"
+                    self.mask_colors[i] = color
+    
+                self.mask_orig = mask
+                self.active_mask_id = 1 if unique_colors else None
+        else:
+            return
+    
+        # Update UI
         values = [f"{i}:{l}" for i, l in self.mask_labels.items()]
         self.combo["values"] = values
+    
         if self.mask_labels:
             self.combo.current(0)
         else:
-            self.combo.set('')
-            
-        # Dectivate all the buttons
-        self.switch_state = None
+            self.combo.set("")
     
         self.update_display()
         self.update_mask_color_preview()
 
+
     
     def save_mask(self, alpha=0.6):
         '''
-        Save mask as a proper .npy file and an associated png image to see the
-        identified masks.
+        Save mask as a proper indexed png file and an associated png image to 
+        see the identified masks.
         alpha=0.6 float [0,1] transparecy of the saved mask
         '''
-        self.deactivate_tools()
-        
+        # Check if an image is loaded
+        if not self.require_image():
+               return
         if self.mask_orig is None:
             return
-    
-        # .npy save
-        p = filedialog.asksaveasfilename(defaultextension=".npy")
+        
+        p = filedialog.asksaveasfilename(defaultextension=".png",
+                                         filetypes=[("PNG indexed", "*.png")])
         if not p:
             return
-        np.save(p, self.mask_orig)
-    
-        if self.image_orig is None:
-            return
-    
-        # Transparent RGBA overlay
-        h, w = self.mask_orig.shape
-        overlay = np.zeros((h, w, 4), dtype=np.uint8)  # RGBA
-    
-        for mid, color in self.mask_colors.items():
-            mask_idx = self.mask_orig == mid
-            overlay[mask_idx, :3] = color
-            overlay[mask_idx, 3] = int(255 * alpha)  # Alpha channeò
-    
-        overlay_img = Image.fromarray(overlay, mode="RGBA")
-    
-        bg = self.image_orig.convert("RGBA")
-        combined = Image.alpha_composite(bg, overlay_img)
-    
-        # PNG save
-        png_path = os.path.splitext(p)[0] + ".png"
-        combined.save(png_path)
         
+        # Crea immagine P (indexed)
+        mask_img = Image.fromarray(self.mask_orig, mode="P")
+        
+        # Costruisci palette (256*3)
+        palette = [0, 0, 0] * 256  # indice 0 = background nero
+        
+        for mid, color in self.mask_colors.items():
+            palette[mid*3:mid*3+3] = list(color)
+        
+        mask_img.putpalette(palette)
+        mask_img.save(p)
+
 
 
     #%% MOUSE EVENTS ----------------------------------------------------------
@@ -657,6 +722,10 @@ class SegmentationApp(ctk.CTk):
         Adjusts the zoom level of the displayed image based on mouse wheel 
         input and refreshes the display.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         self.zoom *= 1.1 if e.delta>0 else 0.9
         self.update_display()
         
@@ -665,6 +734,10 @@ class SegmentationApp(ctk.CTk):
         '''
         Adjust zoom level using keyboard (zoom in).
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         self.zoom *= 1.1
         self.update_display()
 
@@ -673,8 +746,25 @@ class SegmentationApp(ctk.CTk):
         '''
         Adjust zoom level using keyboard (zoom in).
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         self.zoom *= 0.9
         self.update_display()
+        
+        
+    def reset_zoom(self, e=None):
+        '''
+        Reset zoom (CTRL-=).
+        '''
+        if not self.require_image():
+            return
+        self.zoom = 1.0
+        self.offset_x = 0
+        self.offset_y = 0
+        self.update_display()
+
 
 
 
@@ -753,6 +843,10 @@ class SegmentationApp(ctk.CTk):
         color, updates the combo box to reflect remaining masks, and refreshes 
         the display and color preview.
         '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
         self.deactivate_tools()
         if self.active_mask_id is None or self.mask_orig is None: return
         self.push_undo()
