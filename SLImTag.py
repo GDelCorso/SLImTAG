@@ -220,6 +220,8 @@ class SegmentationApp(ctk.CTk):
 
         # BINDINGS ------------------------------------------------------------
         self.canvas.bind("<MouseWheel>", self.zoom_evt)
+        self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
+        self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
         self.canvas.bind("<Motion>", self.draw_brush_preview)
         self.canvas.bind("<Button-1>", self.on_canvas_left)
         self.canvas.bind("<Button-3>", self.on_canvas_right)
@@ -227,10 +229,10 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
-        self.bind("<Control-plus>", self.zoom_in_keyboard)
+        self.bind("<Control-plus>", self.zoom_in)
         self.bind("<Control-equal>", self.reset_zoom)  
         self.bind("<Control-space>", self.reset_zoom)
-        self.bind("<Control-minus>", self.zoom_out_keyboard)
+        self.bind("<Control-minus>", self.zoom_out)
         
         # Move view:
         self.bind("<Up>", lambda e: self.pan_view(0, -20))
@@ -817,9 +819,9 @@ class SegmentationApp(ctk.CTk):
         self.update_display()
         
         
-    def zoom_in_keyboard(self, e=None):
+    def zoom_in(self, e=None):
         '''
-        Adjust zoom level using keyboard (zoom in).
+        Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
         if not self.require_image():
@@ -829,9 +831,9 @@ class SegmentationApp(ctk.CTk):
         self.update_display()
 
 
-    def zoom_out_keyboard(self, e=None):
+    def zoom_out(self, e=None):
         '''
-        Adjust zoom level using keyboard (zoom in).
+        Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
         if not self.require_image():
