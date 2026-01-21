@@ -42,6 +42,8 @@ warnings.filterwarnings(
 MAX_DISPLAY = 800   # Maximum display size for resizing images
 UNDO_DEPTH = 10     # Maximum number of undo steps
 
+MAX_RES = 1024    # Hardcoded, maximum working resolution, if None, deactivated
+
 # predefined high contrast colors for masks
 MAX_MASKS = 20 
 HIGH_CONTRAST_COLORS = [
@@ -113,6 +115,10 @@ class SegmentationApp(ctk.CTk):
         self.offset_x = 0
         self.offset_y = 0
         self._pan_start = None
+
+        # Original values for rescale        
+        self.orig_h = None  
+        self.orig_w = None  
 
         self.mask_labels = {}
         self.mask_colors = {}
@@ -479,12 +485,30 @@ class SegmentationApp(ctk.CTk):
         Load a .png or .jpg image and define and empty mask on it
         '''
         self.deactivate_tools()
-        p = filedialog.askopenfilename()
-        if not p: return
-        self.image_orig = Image.open(p).convert("RGB")
-        self.mask_orig = np.zeros(self.image_orig.size[::-1], np.uint8)
+        p = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
+        if not p: 
+            return
+        
+        img = Image.open(p).convert("RGB")
+        self.orig_w, self.orig_h = img.size
+        
+        # SCALING if MAX_RES is set
+        if MAX_RES is not None:
+            max_axis = max(self.orig_w, self.orig_h)
+            scale = MAX_RES / max_axis
+            if scale < 1.0:  # only scale down
+                new_w = int(self.orig_w * scale)
+                new_h = int(self.orig_h * scale)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+            else:
+                new_w, new_h = self.orig_w, self.orig_h
+        else:
+            new_w, new_h = self.orig_w, self.orig_h
+        
+        self.image_orig = img
+        self.mask_orig = np.zeros((new_h, new_w), np.uint8)
         self.sam.set_image(np.array(self.image_orig))
-          
+        
         self.set_controls_state(True)
         self.update_display()
         
@@ -495,86 +519,82 @@ class SegmentationApp(ctk.CTk):
         - Indexed PNG (mode "P"): direct recovery of mask indices.
         - RGB PNG: legacy color-based reconstruction.
         """
-        # Check if an image is loaded
         if not self.require_image():
             return
     
         self.deactivate_tools()
-    
-        p = filedialog.askopenfilename(
-            filetypes=[("IndexedPNG or PNG", "*.png")]
-        )
+        p = filedialog.askopenfilename(filetypes=[("IndexedPNG or PNG", "*.png")])
         if not p:
             return
     
         self.push_undo()
-    
         ext = os.path.splitext(p)[1].lower()
     
         self.mask_labels.clear()
         self.mask_colors.clear()
         self.active_mask_id = None
     
-        if ext == ".png":
-            img = Image.open(p)
-    
-            # CASE 1: Indexed PNG (preferred)
-            if img.mode == "P":
-                arr = np.array(img, dtype=np.uint8)
-                self.mask_orig = arr.copy()
-    
-                labels = np.unique(arr)
-                labels = labels[labels != 0][:MAX_MASKS]
-    
-                palette = img.getpalette()  # flat list [R,G,B,...]
-    
-                for l in labels:
-                    self.mask_labels[l] = f"mask_{l}"
-                    idx = l * 3
-                    self.mask_colors[l] = tuple(palette[idx:idx+3])
-    
-                self.active_mask_id = labels[0] if len(labels) > 0 else None
-    
-            # CASE 2: Generic RGB PNG
-            else:
-                img = img.convert("RGB")
-                arr = np.array(img)
-                h, w, _ = arr.shape
-    
-                arr_flat = arr.reshape(-1, 3)
-                arr_flat_nonblack = arr_flat[
-                    ~np.all(arr_flat == 0, axis=1)
-                ]
-    
-                if len(arr_flat_nonblack) == 0:
-                    self.mask_orig = np.zeros((h, w), np.uint8)
-                    return
-    
-                unique_colors = []
-                seen = set()
-                for color in arr_flat_nonblack:
-                    t = tuple(color)
-                    if t not in seen:
-                        seen.add(t)
-                        unique_colors.append(t)
-                        if len(unique_colors) >= MAX_MASKS:
-                            break
-    
-                mask = np.zeros((h, w), np.uint8)
-                for i, color in enumerate(unique_colors, 1):
-                    mask[np.all(arr == color, axis=-1)] = i
-                    self.mask_labels[i] = f"mask_{i}"
-                    self.mask_colors[i] = color
-    
-                self.mask_orig = mask
-                self.active_mask_id = 1 if unique_colors else None
-        else:
+        if ext != ".png":
             return
+    
+        img = Image.open(p)
+    
+        # CASE 1: Indexed PNG
+        if img.mode == "P":
+            arr = np.array(img, dtype=np.uint8)
+            self.mask_orig = arr.copy()
+            labels = np.unique(arr)
+            labels = labels[labels != 0][:MAX_MASKS]
+            palette = img.getpalette()
+    
+            for l in labels:
+                self.mask_labels[l] = f"mask_{l}"
+                idx = l * 3
+                self.mask_colors[l] = tuple(palette[idx:idx+3])
+    
+            self.active_mask_id = labels[0] if len(labels) > 0 else None
+    
+        # CASE 2: Generic RGB PNG
+        else:
+            img = img.convert("RGB")
+            arr = np.array(img)
+            h, w, _ = arr.shape
+    
+            arr_flat = arr.reshape(-1, 3)
+            arr_flat_nonblack = arr_flat[~np.all(arr_flat == 0, axis=1)]
+    
+            if len(arr_flat_nonblack) == 0:
+                self.mask_orig = np.zeros((h, w), np.uint8)
+                return
+    
+            unique_colors = []
+            seen = set()
+            for color in arr_flat_nonblack:
+                t = tuple(color)
+                if t not in seen:
+                    seen.add(t)
+                    unique_colors.append(t)
+                    if len(unique_colors) >= MAX_MASKS:
+                        break
+    
+            mask = np.zeros((h, w), np.uint8)
+            for i, color in enumerate(unique_colors, 1):
+                mask[np.all(arr == color, axis=-1)] = i
+                self.mask_labels[i] = f"mask_{i}"
+                self.mask_colors[i] = color
+    
+            self.mask_orig = mask
+            self.active_mask_id = 1 if unique_colors else None
+    
+        # SCale
+        if MAX_RES is not None:
+            self.mask_orig = np.array(Image.fromarray(self.mask_orig).resize(
+                (self.image_orig.size[0], self.image_orig.size[1]), Image.NEAREST
+            ))
     
         # Update UI
         values = [f"{i}:{l}" for i, l in self.mask_labels.items()]
         self.combo["values"] = values
-    
         if self.mask_labels:
             self.combo.current(0)
         else:
@@ -583,36 +603,34 @@ class SegmentationApp(ctk.CTk):
         self.update_display()
         self.update_mask_color_preview()
 
-
     
     def save_mask(self, alpha=0.6):
         '''
         Save mask as a proper indexed png file and an associated png image to 
         see the identified masks.
-        alpha=0.6 float [0,1] transparecy of the saved mask
         '''
         # Check if an image is loaded
         if not self.require_image():
-               return
+            return
         if self.mask_orig is None:
             return
-        
+    
         p = filedialog.asksaveasfilename(defaultextension=".png",
                                          filetypes=[("PNG indexed", "*.png")])
         if not p:
             return
+    
+        # SCALE
+        mask_to_save = Image.fromarray(self.mask_orig, mode="P")
+        mask_to_save = mask_to_save.resize((self.orig_w, self.orig_h), Image.NEAREST)
+    
         
-        # Crea immagine P (indexed)
-        mask_img = Image.fromarray(self.mask_orig, mode="P")
-        
-        # Costruisci palette (256*3)
-        palette = [0, 0, 0] * 256  # indice 0 = background nero
-        
+        palette = [0, 0, 0] * 256  # index 0 = background nero
         for mid, color in self.mask_colors.items():
             palette[mid*3:mid*3+3] = list(color)
-        
-        mask_img.putpalette(palette)
-        mask_img.save(p)
+    
+        mask_to_save.putpalette(palette)
+        mask_to_save.save(p)
 
 
 
