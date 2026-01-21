@@ -1,5 +1,5 @@
 # SLImTAG – *S*imple *L*ight-weight *Im*age *Tag*ging tool
- 
+
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -25,7 +25,7 @@
 
 - Python == 3.12
 
-- PyTorch == torch 2.5.1 (CUDA 12.1 recommended if available)
+- PyTorch: torch == 2.5.1 (CUDA 12.1 recommended if available) and torchvision == 0.20.1
 
 - NumPy == 2.3.1
 - SciPy == 1.17.0
@@ -33,9 +33,36 @@
 - CustomTkinter == 5.2.2
 - Segment Anything Model (SAM) weights == 1.0
 
-> Download SAM model weights and place in `models/` directory: `sam_vit_b_01ec64.pth`  
-https://github.com/facebookresearch/segment-anything
+### SAM model weights
 
+Download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in a subfolder named `models` in SLImTAG's root folder.
+
+---
+
+## Installation
+
+Clone the repository
+```bash
+git clone https://github.com/GDelCorso/SLImTAG
+cd SLImTAG
+```
+
+Create a virtual environment
+
+```bash
+python3 -m venv slimtag-venv
+```
+
+Activate the environment: on Mac/Linux
+
+```bash
+source slimtag-venv/bin/activate
+```
+
+on Windows
+```bash
+myfirstproject\Scripts\activate
+```
 
 Install dependencies:
 
@@ -43,24 +70,26 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## Installation
+That's it! To run the program just do
+
 ```bash
-git clone https://github.com/GDelCorso/SLImTAG
-cd SLImTAG
+python3 SLImTag.py
 ```
+
+from the project folder, with the virtual environment activated.
 
 ---
 
 ## Usage
 ### Buttons
-| Button / Tool           | Description                        | Shortcut |
-| ----------------------- | ---------------------------------- | -------- |
-| **Brush**               | Paint or erase manually            | B        |
-| **Magic Wand**          | AI-assisted segmentation (SAM)     | M        |
-| **Connected Component** | Select/remove connected areas      | C        |
-| **Smoothing**           | Dilate/erode selected component    | S        |
-| **Undo**                | Undo last change                   | Z        |
-| **Add New Mask**        | Create a new mask with custom name | –        |
+| Button / Tool           | Description                        | Shortcut     |
+| ----------------------- | ---------------------------------- | ------------ |
+| **Brush**               | Paint or erase manually            | <kbd>B</kbd> |
+| **Magic Wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> |
+| **Connected Component** | Select/remove connected areas      | <kbd>C</kbd> |
+| **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> |
+| **Undo**                | Undo last change                   | <kbd>Z</kbd> |
+| **Add New Mask**        | Create a new mask with custom name | –            |
 
 ---
 
@@ -72,15 +101,14 @@ Right Click – Remove or erode depending on active tool.
 
 Drag – Brush painting follows mouse movement.
 
-Mouse Wheel – Zoom in/out of the image.
-CTRL+ - Zoom in and CTRL- - Zoom out.
+Mouse Wheel – Zoom in/out of the image. Also <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> work for zoom in/out, and either <kbd>Ctrl</kbd>+<kbd>=</kbd> or <kbd>Ctrl</kbd>+<kbd>space</kbd> reset the zoom.
 
 ---
 
 ### Saving & Loading Masks
-Save Mask: Saves .npy and a semi-transparent PNG overlay of the masks.
+Save Mask: Saves the mask as an indexed PNG file, and a semi-transparent PNG overlay of the masks.
 
-Load Mask: Loads .npy or .png. If PNG, extracts up to 20 unique colors as separate masks. Extra colors are ignored.
+Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
 
 
 ---
