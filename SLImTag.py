@@ -123,6 +123,8 @@ class SegmentationApp(ctk.CTk):
         self.mask_labels = {}
         self.mask_colors = {}
         self.active_mask_id = None
+        
+        self.only_on_empty = tk.BooleanVar(value=False)
  
         self.brush_active = False
         self.magic_mode = False
@@ -200,6 +202,11 @@ class SegmentationApp(ctk.CTk):
         self.all_action_buttons = [self.brush_btn, self.magic_btn, self.cc_btn, 
                                                             self.smoothing_btn]
         self.set_controls_state(False) # Deactivate all buttons
+        
+        self.only_empty_btn = ctk.CTkCheckBox(
+        self.panel, text="Only add on empty [✓]", variable=self.only_on_empty)
+        self.only_empty_btn.pack(fill="x", padx=10, pady=5)
+
 
 
         # SAM -----------------------------------------------------------------
@@ -868,7 +875,11 @@ class SegmentationApp(ctk.CTk):
         circle = (yy - y)**2 + (xx - x)**2 <= r*r
     
         if add:
-            self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
+            if self.only_on_empty.get():
+                mask_area = self.mask_orig[y0:y1, x0:x1]
+                mask_area[circle & (mask_area==0)] = self.active_mask_id
+            else:
+                self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
         else:
             erase_mask = circle & (self.mask_orig[y0:y1, x0:x1] == self.active_mask_id)
             self.mask_orig[y0:y1, x0:x1][erase_mask] = 0
@@ -903,9 +914,13 @@ class SegmentationApp(ctk.CTk):
         masks,_,_ = self.sam.predict(np.array([[x,y]]), np.array([1]), 
                                                         multimask_output=False)
         if add:
-            self.mask_orig[masks[0]] = self.active_mask_id
+            if self.only_on_empty.get():
+                self.mask_orig[masks[0] & (self.mask_orig==0)]= self.active_mask_id
+            else:
+                self.mask_orig[masks[0]] = self.active_mask_id
         else:
-            self.mask_orig[masks[0] & (self.mask_orig==self.active_mask_id)] = 0
+            self.mask_orig[masks[0] & (self.mask_orig==self.active_mask_id)]=0
+            
         self.update_display()
 
 
@@ -977,10 +992,15 @@ class SegmentationApp(ctk.CTk):
         comp = self.get_connected_component(self.mask_orig, y, x, 
                                                            self.active_mask_id)
         self.push_undo()
+        
         if remove_only:
             self.mask_orig[comp] = 0
         else:
-            self.mask_orig[(self.mask_orig==self.active_mask_id) & (~comp)] = 0
+            if self.only_on_empty.get():
+                self.mask_orig[(self.mask_orig==0) & comp] = self.active_mask_id
+            else:
+                self.mask_orig[(self.mask_orig==self.active_mask_id) & (~comp)]=0
+            
         self.update_display()
         
 
@@ -1010,9 +1030,12 @@ class SegmentationApp(ctk.CTk):
             comp_smooth = binary_erosion(comp, structure=struct, iterations=1)
         else:
             return
-    
+        
         self.mask_orig[comp] = 0
-        self.mask_orig[comp_smooth] = self.active_mask_id
+        if self.only_on_empty.get():
+            self.mask_orig[comp_smooth & (self.mask_orig==0)] = self.active_mask_id
+        else:
+            self.mask_orig[comp_smooth] = self.active_mask_id
         self.update_display()
 
 
