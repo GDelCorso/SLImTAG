@@ -81,3 +81,8 @@ CTRL+ - Zoom in and CTRL- - Zoom out.
 Save Mask: Saves .npy and a semi-transparent PNG overlay of the masks.
 
 Load Mask: Loads .npy or .png. If PNG, extracts up to 20 unique colors as separate masks. Extra colors are ignored.
+
+
+---
+#TO-DO LIST and BUGFIX:
+1) Known issue that zoomed images lead to unefficient brush due to rescaling on the full img needed.
