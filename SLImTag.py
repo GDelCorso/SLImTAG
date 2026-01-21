@@ -509,6 +509,14 @@ class SegmentationApp(ctk.CTk):
         self.mask_orig = np.zeros((new_h, new_w), np.uint8)
         self.sam.set_image(np.array(self.image_orig))
         
+        # RESET MASKS ---------------------------------------------------------
+        self.mask_labels.clear()
+        self.mask_colors.clear()
+        self.active_mask_id = None
+        self.combo["values"] = []
+        self.combo.set("")
+        self.undo_stack.clear()
+            
         self.set_controls_state(True)
         self.update_display()
         
@@ -673,6 +681,8 @@ class SegmentationApp(ctk.CTk):
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
         self._pan_start = None
+        self._drag_counter = 0
+        self.update_display()
 
     
     def on_canvas_right(self, e):
@@ -704,7 +714,6 @@ class SegmentationApp(ctk.CTk):
         No interpolation between points to avoid undesired smoothing.
         '''
         shift_pressed = (e.state & 0x0001) != 0
-        
         if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
             if self._pan_start is not None:
                 x0, y0, ox0, oy0 = self._pan_start
@@ -739,7 +748,12 @@ class SegmentationApp(ctk.CTk):
             yi = int(y0 + dy * i / dist)
             self.brush_at(xi, yi, add=not shift_pressed)
         
-        self.update_display()
+        # Skip some updates when zooming molto
+        self._drag_counter = getattr(self, "_drag_counter", 0) + 1
+        skip_rate = max(1, int(self.zoom*2))
+        if self._drag_counter % skip_rate == 0:
+            self.update_display()
+        
         self._prev_brush_pos = (x1, y1)
     
     
@@ -870,10 +884,9 @@ class SegmentationApp(ctk.CTk):
         self.canvas.delete("brush")
         if not self.brush_active: return
         x, y = e.x, e.y
-        r = self.brush_size*self.display_scale/2
+        r = self.brush_size * self.display_scale / 2
         self.canvas.create_oval(x-r, y-r, x+r, y+r,
-                                fill="#FFFF00", outline="#FFFF00",
-                                stipple="gray25", width=1, tag="brush")
+                                fill="", outline="#FFFF00", width=2, tag="brush")
         
     
     # SAM ---------------------------------------------------------------------
