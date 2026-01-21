@@ -9,6 +9,7 @@ Giulio Del Corso & Oscar Papini
 
 #%% Libraries
 import os                      
+import time
 
 # Numerical arrays manipulation
 import numpy as np             
@@ -43,6 +44,7 @@ MAX_DISPLAY = 800   # Maximum display size for resizing images
 UNDO_DEPTH = 10     # Maximum number of undo steps
 
 MAX_RES = 1024    # Hardcoded, maximum working resolution, if None, deactivated
+REFRESH_RATE_BRUSH = 0.05    # Refresh rate for the brush
 
 # predefined high contrast colors for masks
 MAX_MASKS = 20 
@@ -755,11 +757,15 @@ class SegmentationApp(ctk.CTk):
             yi = int(y0 + dy * i / dist)
             self.brush_at(xi, yi, add=not shift_pressed)
         
-        # Skip some updates when zooming molto
-        self._drag_counter = getattr(self, "_drag_counter", 0) + 1
-        skip_rate = max(1, int(self.zoom*2))
-        if self._drag_counter % skip_rate == 0:
+        # Skip some updates when zooming 
+        now = time.monotonic()
+        
+        if not hasattr(self, "_last_brush_update"):
+            self._last_brush_update = 0.0
+        
+        if now - self._last_brush_update >= REFRESH_RATE_BRUSH:
             self.update_display()
+            self._last_brush_update = now
         
         self._prev_brush_pos = (x1, y1)
     
