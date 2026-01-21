@@ -59,9 +59,19 @@ MAGIC_ON_COLOR = "#FF9800"   # orange
 CC_ON_COLOR = "#9C27B0"      # purple
 SMOOTH_ON_COLOR = "#2196F3"  # blue
 
-# SAM parameters
-MODEL_TYPE = "vit_b"
-MODEL_WEIGHTS_PATH = "models/sam_vit_b_01ec64.pth"
+
+#%% SAM parameters
+# Choose the model type
+MODEL_TYPE = "vit_b"    # Lightweight
+
+if MODEL_TYPE == "vit_b":       # Lightweight
+    MODEL_WEIGHTS_PATH = "models/sam_vit_b_01ec64.pth"
+elif MODEL_TYPE == "vit_l":     # Standard
+    MODEL_WEIGHTS_PATH = "models/sam_vit_l_0b3195.pth"
+elif MODEL_TYPE == "vit_h":     # Advanced
+    MODEL_WEIGHTS_PATH = "models/sam_vit_h_4b8939.pth"    
+else:
+    raise Exception("Warning: select a correct model type.") 
 
 
 
@@ -76,7 +86,7 @@ ctk.set_default_color_theme("blue") # CTK color theme
 class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("EasyTAG")
+        self.title(f"EasyTAG ({MODEL_TYPE})")
         self.geometry("1300x900")
         
         self.menu_bar = tk.Menu(self)
@@ -102,6 +112,7 @@ class SegmentationApp(ctk.CTk):
         self.zoom = 1.0
         self.offset_x = 0
         self.offset_y = 0
+        self._pan_start = None
 
         self.mask_labels = {}
         self.mask_colors = {}
@@ -206,6 +217,12 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-space>", self.reset_zoom)
         self.bind("<Control-minus>", self.zoom_out_keyboard)
         
+        # Move view:
+        self.bind("<Up>", lambda e: self.pan_view(0, -20))
+        self.bind("<Down>", lambda e: self.pan_view(0, 20)) 
+        self.bind("<Left>", lambda e: self.pan_view(-20, 0))
+        self.bind("<Right>", lambda e: self.pan_view(20, 0))
+        
         
         # SHORTCUT KEYS -------------------------------------------------------
         self.bind("<b>", lambda e: self.toggle_brush())
@@ -218,6 +235,8 @@ class SegmentationApp(ctk.CTk):
         self.bind("<S>", lambda e: self.toggle_smoothing())
         self.bind("<z>", lambda e: self.undo()) 
         self.bind("<Z>", lambda e: self.undo()) 
+        
+        
         
         
 
@@ -604,17 +623,16 @@ class SegmentationApp(ctk.CTk):
         (brush, magic wand, connected component, or smoothing) and using Shift 
         to modify behavior.
         '''
-        shift_pressed = (e.state & 0x0001) != 0  
-        
+        shift_pressed = (e.state & 0x0001) != 0
         self._prev_brush_pos = None
-        
+    
         if self.smoothing_active:
             y = int((e.y - self.offset_y)/self.display_scale)
             x = int((e.x - self.offset_x)/self.display_scale)
             op = "erosion" if shift_pressed else "dilation"
             self.apply_smoothing(y, x, operation=op)
             return "break"
-        
+    
         if self.cc_mode:
             self.connected_component_click(e, remove_only=not shift_pressed)
             return "break"
@@ -625,13 +643,18 @@ class SegmentationApp(ctk.CTk):
             self.brush_at(int((e.x - self.offset_x)/self.display_scale),
                           int((e.y - self.offset_y)/self.display_scale),
                           add=not shift_pressed)
-            self.push_undo()  
+            self.push_undo()
             self.update_display()
+            return "break"
+    
+        if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
+            self._pan_start = (e.x, e.y, self.offset_x, self.offset_y)
             return "break"
         
         
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
+        self._pan_start = None
 
     
     def on_canvas_right(self, e):
@@ -662,17 +685,25 @@ class SegmentationApp(ctk.CTk):
         Draws one circle per event, using add/subtract depending on Shift.
         No interpolation between points to avoid undesired smoothing.
         '''
-        if not self.brush_active or self.cc_mode:
+        shift_pressed = (e.state & 0x0001) != 0
+        
+        if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
+            if self._pan_start is not None:
+                x0, y0, ox0, oy0 = self._pan_start
+                self.offset_x = ox0 + (e.x - x0)
+                self.offset_y = oy0 + (e.y - y0)
+                self.update_display()
             return
         
-        shift_pressed = (e.state & 0x0001) != 0
+        if not self.brush_active or self.cc_mode:
+            return
         
         x1 = int((e.x - self.offset_x) / self.display_scale)
         y1 = int((e.y - self.offset_y) / self.display_scale)
         
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
-            self.push_undo()  
+            self.push_undo()
             self.brush_at(x1, y1, add=not shift_pressed)
             self.update_display()
             return
@@ -692,6 +723,17 @@ class SegmentationApp(ctk.CTk):
         
         self.update_display()
         self._prev_brush_pos = (x1, y1)
+    
+    
+    def pan_view(self, dx, dy):
+        '''
+        Use arrows to move across the image.
+        '''
+        if not self.require_image():
+            return
+        self.offset_x += dx
+        self.offset_y += dy
+        self.update_display()
 
 
     def brush_at(self, x, y, add=True):
