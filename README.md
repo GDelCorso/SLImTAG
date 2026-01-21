@@ -84,5 +84,6 @@ Load Mask: Loads .npy or .png. If PNG, extracts up to 20 unique colors as separa
 
 
 ---
-#TO-DO LIST and BUGFIX:
+# TO-DO LIST and BUGFIX:
 1) Known issue that zoomed images lead to unefficient brush due to rescaling on the full img needed.
+2) Integrate SAM with multiple positive and negative points as an extra buttn "advanced SAM"
