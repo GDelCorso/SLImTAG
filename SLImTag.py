@@ -90,7 +90,7 @@ ctk.set_default_color_theme("blue") # CTK color theme
 class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title(f"EasyTAG ({MODEL_TYPE})")
+        self.title(f"SLImTAG ({MODEL_TYPE})")
         self.geometry("1300x900")
         
         self.menu_bar = tk.Menu(self)
