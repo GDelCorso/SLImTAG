@@ -112,6 +112,22 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 
 
 ---
-# TO-DO LIST and BUGFIX:
-1) Known issue that zoomed images lead to unefficient brush due to rescaling on the full img needed.
-2) Integrate SAM with multiple positive and negative points as an extra buttn "advanced SAM"
+## TO-DO LIST and BUGFIX:
+
+### Major
+- [ ] Rewrite GUI
+- [ ] Redefine zoom function (by avoiding update loop on subselection)
+- [ ] Ctrl+magic wand: multiple conditional points (left: positive, right: negative), activate SAM at release Ctrl, and mask preview
+
+### Minor
+- [ ] Zoom on mouse location instead of top left corner
+- [ ] Add statusbar
+- [ ] Brush subraction and connected component currently don't work when "Only add on empty" is active
+- [ ] Implement argparse with "--no-sam" option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)
+- [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
+- [ ] convert hardcoded parameters to argparse arguments
+- [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
+
+### Potential additional features
+- [ ] Different brush shapes (square)
+- [ ] Rectangle/polygonal "add to mask" tool
