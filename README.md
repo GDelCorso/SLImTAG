@@ -61,7 +61,7 @@ source slimtag-venv/bin/activate
 
 on Windows
 ```bash
-myfirstproject\Scripts\activate
+slimtag-venv\Scripts\activate
 ```
 
 Install dependencies:
@@ -125,7 +125,7 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 - [ ] Brush subraction and connected component currently don't work when "Only add on empty" is active
 - [ ] Implement argparse with "--no-sam" option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
-- [ ] convert hardcoded parameters to argparse arguments
+- [ ] Convert hardcoded parameters to argparse arguments
 - [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
 
 ### Potential additional features
