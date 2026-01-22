@@ -496,7 +496,7 @@ class SegmentationApp(ctk.CTk):
         Load a .png or .jpg image and define and empty mask on it
         '''
         self.deactivate_tools()
-        p = filedialog.askopenfilename(filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
+        p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
         if not p: 
             return
         
