@@ -130,3 +130,8 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 ### Potential additional features
 - [ ] Different brush shapes (square)
 - [ ] Rectangle/polygonal "add to mask" tool
+
+### Extension to bio-medical fields
+- [ ] Import MedSAM and modify the MagicWand wrapper
+- [ ] Import also .nrrd and .nifti files for MRI/scan segmentation
+- [ ] Allows to import 3D (i.e., ordered list of 2D elements) views for 3D MRI scans and video segmentation
