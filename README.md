@@ -12,10 +12,10 @@
 
 - Add, select, and delete multiple tasks
 - Brush tool for manual painting.
-- Magic Wand (SAM) for AI-assisted segmentation.
+- Magic wand (SAM) for AI-assisted segmentation.
 - Connected Component tool for precise selection/removal.
 - Smoothing tool (dilation/erosion) for mask refinement.
-- Undo support with **Z shortcut**.
+- Undo support with **Ctrl-Z shortcut**.
 - Save masks and load masks
 - Minimal libraries requirements
 
@@ -103,7 +103,7 @@ Use the `Add new mask` button to create a new mask with a custom label. The drop
 
 ### Buttons
 
-Only one tool can be selected at a time. Clicking on the active tool button (or pressing the relative shortcut key) will deselect it. The `Undo` button (with <kbd>Z</kbd> shortcut) undoes the last operation.
+Only one tool can be selected at a time. Clicking on the active tool button (or pressing the relative shortcut key) will deselect it. The `Undo` button (also available under the `Edit` menu, or with the <kbd>Ctrl</kbd>+<kbd>Z</kbd> shortcut) undoes the last operation.
 
 | Button / Tool           | Description                        | Shortcut     | Left click                 | Right click                   |
 | ----------------------- | ---------------------------------- | ------------ | -------------------------- | ----------------------------- |
@@ -122,7 +122,7 @@ See table above for the left/right click actions associated with each tool. For 
 
 For the brush tool, click-and-drag with the **left** button follows the mouse movement. **Right** click is a bit more sluggish ― please use <kbd>Shift</kbd>+left click if needed.
 
-Scroll with the mouse wheel to zoom in/out of the image. Also <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> work for zoom in/out, and either <kbd>Ctrl</kbd>+<kbd>=</kbd> or <kbd>Ctrl</kbd>+<kbd>space</kbd> reset the zoom.
+Zoom is regulated via the `View` menu or by scrolling with the mouse wheel. Also <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> work for zoom in/out, and either <kbd>Ctrl</kbd>+<kbd>0</kbd> or <kbd>Ctrl</kbd>+<kbd>space</kbd> reset the zoom.
 
 When **no** tool is selected, left click-and-drag to pan the image.
 
@@ -149,6 +149,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 - [ ] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 - [ ] Allow "Clean Mask" undo
+- [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 
 ### Potential additional features
 - [ ] Different brush shapes (square)

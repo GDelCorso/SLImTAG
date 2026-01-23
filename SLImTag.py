@@ -98,8 +98,18 @@ class SegmentationApp(ctk.CTk):
         
         # Menu File (top menu)
         file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Q")
+        file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Ctrl+Q")
         self.menu_bar.add_cascade(label="File", menu=file_menu)
+        # Menu Edit (top menu)
+        edit_menu = tk.Menu(self.menu_bar, tearoff=0)
+        edit_menu.add_command(label="Undo", command=self.undo, accelerator="Ctrl+Z")
+        self.menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        # Menu View (top menu)
+        view_menu = tk.Menu(self.menu_bar, tearoff=0)
+        view_menu.add_command(label="Zoom in", command=self.zoom_in, accelerator="Ctrl++")
+        view_menu.add_command(label="Zoom out", command=self.zoom_out, accelerator="Ctrl+-")
+        view_menu.add_command(label="Reset zoom", command=self.reset_zoom, accelerator="Ctrl+0")
+        self.menu_bar.add_cascade(label="View", menu=view_menu)
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.load_image)
@@ -175,7 +185,7 @@ class SegmentationApp(ctk.CTk):
 
 
         # Undo button
-        ctk.CTkButton(self.panel, text="Undo [Z]", command=self.undo).pack(fill="x", padx=10, pady=5)
+        ctk.CTkButton(self.panel, text="Undo [Ctrl-Z]", command=self.undo).pack(fill="x", padx=10, pady=5)
 
 
         # Tool buttons
@@ -227,7 +237,8 @@ class SegmentationApp(ctk.CTk):
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
         self.bind("<Control-plus>", self.zoom_in)
-        self.bind("<Control-equal>", self.reset_zoom)
+        #self.bind("<Control-equal>", self.reset_zoom) # usually it is Ctrl-0
+        self.bind("<Control-0>", self.reset_zoom)
         self.bind("<Control-space>", self.reset_zoom)
         self.bind("<Control-minus>", self.zoom_out)
         
@@ -250,12 +261,14 @@ class SegmentationApp(ctk.CTk):
         self.bind("<C>", lambda e: self.toggle_cc_mode())
         self.bind("<s>", lambda e: self.toggle_smoothing())
         self.bind("<S>", lambda e: self.toggle_smoothing())
-        self.bind("<z>", lambda e: self.undo())
-        self.bind("<Z>", lambda e: self.undo())
+        #self.bind("<z>", lambda e: self.undo()) # I actually prefer Ctrl-Z, but
+        #self.bind("<Z>", lambda e: self.undo()) # we can discuss about this. -Oscar
+        self.bind("<Control-z>", lambda e: self.undo())
+        self.bind("<Control-Z>", lambda e: self.undo())
         self.bind("<Control-S>", lambda e: self.save_mask())
         self.bind("<Control-s>", lambda e: self.save_mask())
-        self.bind("<q>", lambda e: self.quit_program())
-        self.bind("<Q>", lambda e: self.quit_program())
+        self.bind("<Control-q>", lambda e: self.quit_program())
+        self.bind("<Control-Q>", lambda e: self.quit_program())
         
         
         
