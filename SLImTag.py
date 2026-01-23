@@ -106,10 +106,10 @@ class SegmentationApp(ctk.CTk):
         self.menu_bar.add_cascade(label="Image", menu=image_menu)
         # Menu Mask (top menu)
         mask_menu = tk.Menu(self.menu_bar, tearoff=0)
-        mask_menu.add_command(label="Load Mask", command=self.load_mask)
-        mask_menu.add_command(label="Save Mask", command=self.save_mask, accelerator="Ctrl+S")
+        mask_menu.add_command(label="Load mask", command=self.load_mask)
+        mask_menu.add_command(label="Save mask", command=self.save_mask, accelerator="Ctrl+S")
         mask_menu.add_separator()
-        mask_menu.add_command(label="Clear Mask", command=self.clear_active_mask)
+        mask_menu.add_command(label="Clear mask", command=self.clear_active_mask)
         self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
         
 
@@ -186,13 +186,13 @@ class SegmentationApp(ctk.CTk):
         self.brush_slider.set(self.brush_size)
         self.brush_slider.pack(fill="x", padx=10)
 
-        self.magic_btn = ctk.CTkButton(self.panel, text="Magic Wand [M]", command=self.toggle_magic)
+        self.magic_btn = ctk.CTkButton(self.panel, text="Magic wand [M]", command=self.toggle_magic)
         self.magic_btn.pack(fill="x", padx=10, pady=5)
 
         self.smoothing_btn = ctk.CTkButton(self.panel, text="Smoothing [S]", command=self.toggle_smoothing)
         self.smoothing_btn.pack(fill="x", padx=10, pady=5)
 
-        self.cc_btn = ctk.CTkButton(self.panel, text="Connected Component [C]", command=self.toggle_cc_mode)
+        self.cc_btn = ctk.CTkButton(self.panel, text="Connected component [C]", command=self.toggle_cc_mode)
         self.cc_btn.pack(fill="x", padx=10)
 
         self.brush_btn.configure(fg_color=TOOL_OFF_COLOR)
