@@ -64,7 +64,7 @@ slimtag-venv\Scripts\activate
 4. Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 5. Download SAM's weights and let SLImTAG access them. To do so, create a folder called `models` in SLImTAG's root folder:
