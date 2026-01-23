@@ -86,37 +86,46 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 ---
 
 ## Usage
-### Buttons
-| Button / Tool           | Description                        | Shortcut     |
-| ----------------------- | ---------------------------------- | ------------ |
-| **Brush**               | Paint or erase manually            | <kbd>B</kbd> |
-| **Magic Wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> |
-| **Connected Component** | Select/remove connected areas      | <kbd>C</kbd> |
-| **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> |
-| **Undo**                | Undo last change                   | <kbd>Z</kbd> |
-| **Add New Mask**        | Create a new mask with custom name | –            |
 
----
+![Interface](images/gui.png)
+
+The first step is to load an image (in PNG or JPG) using `Image > Import Image` from the menu.
+
+### Mask Actions
+
+Use the `Add new mask` button to create a new mask with a custom label. The dropdown menu selects the active mask, i.e. the one on which the tools are going to act. Up to 20 masks can be defined for a file.
+
+`Mask > Clear Mask` will REMOVE all the regions marked with the current mask, and also remove the mask from the list. **This action cannot be undone.**
+
+`Mask > Save Mask` saves the mask as an indexed PNG file, and a copy of the original image with a semi-transparent PNG overlay of the masks.
+
+`Mask > Load Mask` loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
+
+### Buttons
+
+Only one tool can be selected at a time. Clicking on the active tool button (or pressing the relative shortcut key) will deselect it. The `Undo` button (with <kbd>Z</kbd> shortcut) undoes the last operation.
+
+| Button / Tool           | Description                        | Shortcut     | Left click         | Right click           |
+| ----------------------- | ---------------------------------- | ------------ | ------------------ | --------------------- |
+| **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint              | Erase                 |
+| **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region         | Remove region         |
+| **Connected component** | Select/remove connected areas      | <kbd>C</kbd> | Remove conn. comp. | Keep only conn. comp. |
+| **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> | Dilate             | Erode                 |
+
+The slider under the `Brush` button determines the size of the brush.
 
 ### Mouse Actions
 
-Left Click – Apply active tool (Shift modifies behavior for some tools).
+See table above for the left/right click actions associated with each tool. For all of them, <kbd>Shift</kbd>+left click is equivalent to right click.
 
-Right Click – Remove or erode depending on active tool.
+For the brush tool, click-and-drag with the **left** button follows the mouse movement. **Right** click is a bit more sluggish ― please use <kbd>Shift</kbd>+left click if needed.
 
-Drag – Brush painting follows mouse movement.
+Scroll with the mouse wheel to zoom in/out of the image. Also <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> work for zoom in/out, and either <kbd>Ctrl</kbd>+<kbd>=</kbd> or <kbd>Ctrl</kbd>+<kbd>space</kbd> reset the zoom.
 
-Mouse Wheel – Zoom in/out of the image. Also <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> work for zoom in/out, and either <kbd>Ctrl</kbd>+<kbd>=</kbd> or <kbd>Ctrl</kbd>+<kbd>space</kbd> reset the zoom.
-
----
-
-### Saving & Loading Masks
-Save Mask: Saves the mask as an indexed PNG file, and a semi-transparent PNG overlay of the masks.
-
-Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
-
+When **no** tool is selected, left click-and-drag to pan the image.
 
 ---
+
 ## TO-DO LIST and BUGFIX:
 
 ### Major
@@ -137,6 +146,7 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [ ] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 - [ ] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
+- [ ] Allow "Clean Mask" undo
 
 ### Potential additional features
 - [ ] Different brush shapes (square)
