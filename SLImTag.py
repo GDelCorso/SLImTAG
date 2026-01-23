@@ -239,6 +239,7 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-plus>", self.zoom_in)
         #self.bind("<Control-equal>", self.reset_zoom) # usually it is Ctrl-0
         self.bind("<Control-0>", self.reset_zoom)
+        self.bind("<Control-KP_0>", self.reset_zoom) # also keypad for madmen like Oscar :)
         self.bind("<Control-space>", self.reset_zoom)
         self.bind("<Control-minus>", self.zoom_out)
         
