@@ -126,11 +126,15 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
 - [ ] Convert hardcoded parameters to argparse arguments
 - [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
+- [ ] To consider: in smoothing tool, add toggle for locking mask at image border, so that it is not erased (useful if mask is background)
+- [ ] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 
 ### Potential additional features
 - [ ] Different brush shapes (square)
 - [ ] Rectangle/polygonal "add to mask" tool
-- [ ] Define plugings for different features to mantain the system lightweight and make it adaptable to user experience
+- [ ] Define plugins for different features to mantain the system lightweight and make it adaptable to user experience
+- [ ] Add button "invert mask"
+- [ ] Add "save png with mask as alpha channel"
 
 ### Extension to bio-medical fields
 - [ ] Import MedSAM and modify the MagicWand wrapper
