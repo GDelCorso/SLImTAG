@@ -100,7 +100,7 @@ class SegmentationApp(ctk.CTk):
         file_menu = tk.Menu(self.menu_bar, tearoff=0)
         file_menu.add_command(label="Import Image", command=self.load_image)
         file_menu.add_command(label="Load Mask", command=self.load_mask)
-        file_menu.add_command(label="Save Mask", command=self.save_mask)
+        file_menu.add_command(label="Save Mask", command=self.save_mask, accelerator="Ctrl+S")
         file_menu.add_separator()
         file_menu.add_command(label="Clear Mask", 
                                                 command=self.clear_active_mask)
@@ -251,7 +251,9 @@ class SegmentationApp(ctk.CTk):
         self.bind("<s>", lambda e: self.toggle_smoothing())
         self.bind("<S>", lambda e: self.toggle_smoothing())
         self.bind("<z>", lambda e: self.undo()) 
-        self.bind("<Z>", lambda e: self.undo()) 
+        self.bind("<Z>", lambda e: self.undo())
+        self.bind("<Control-S>", lambda e: self.save_mask())
+        self.bind("<Control-s>", lambda e: self.save_mask())
         
         
         
