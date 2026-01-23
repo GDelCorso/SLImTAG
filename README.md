@@ -142,6 +142,7 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 - [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [ ] When a mask is removed, a new mask additions should be placed on the first empty value of the list
+- [ ] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 
 ### Potential additional features
 - [ ] Different brush shapes (square)
