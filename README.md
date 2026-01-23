@@ -32,27 +32,25 @@ Please note that the version numbers listed here refer to the environment in whi
 - pillow == 12.0.0 (images management)
 - customtkinter == 5.2.2 (GUI)
 
-### SAM model weights
-
-Download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in a subfolder named `models` in SLImTAG's root folder.
+Also tkinter is required, but it cannot be installed via pip. On Windows it should be provided with Python; on Mac and Linux, you may need to install it through your system's package manager (e.g. `brew install python-tk` with homebrew for Mac, or `sudo apt install python3-tk` for Ubuntu-based Linux distros).
 
 ---
 
 ## Installation
 
-Clone the repository
+1. Clone the repository
 ```bash
 git clone https://github.com/GDelCorso/SLImTAG
 cd SLImTAG
 ```
 
-Create a virtual environment
+2. Create a virtual environment
 
 ```bash
 python3 -m venv slimtag-venv
 ```
 
-Activate the environment: on Mac/Linux
+3. Activate the environment: on Mac/Linux
 
 ```bash
 source slimtag-venv/bin/activate
@@ -63,13 +61,25 @@ on Windows
 slimtag-venv\Scripts\activate
 ```
 
-Install dependencies:
+4. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-That's it! To run the program just do
+5. Download SAM's weights and let SLImTAG access them. To do so, create a folder called `models` in SLImTAG's root folder:
+
+```bash
+mkdir models
+```
+
+Then, download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
+
+```bash
+wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+```
+
+6. That's it! To run the program just do
 
 ```bash
 python3 SLImTag.py
