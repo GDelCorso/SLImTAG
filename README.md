@@ -105,12 +105,12 @@ Use the `Add new mask` button to create a new mask with a custom label. The drop
 
 Only one tool can be selected at a time. Clicking on the active tool button (or pressing the relative shortcut key) will deselect it. The `Undo` button (with <kbd>Z</kbd> shortcut) undoes the last operation.
 
-| Button / Tool           | Description                        | Shortcut     | Left click         | Right click           |
-| ----------------------- | ---------------------------------- | ------------ | ------------------ | --------------------- |
-| **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint              | Erase                 |
-| **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region         | Remove region         |
-| **Connected component** | Select/remove connected areas      | <kbd>C</kbd> | Remove conn. comp. | Keep only conn. comp. |
-| **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> | Dilate             | Erode                 |
+| Button / Tool           | Description                        | Shortcut     | Left click                 | Right click                   |
+| ----------------------- | ---------------------------------- | ------------ | -------------------------- | ----------------------------- |
+| **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
+| **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
+| **Connected component** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
+| **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> | Dilate                     | Erode                         |
 
 The slider under the `Brush` button determines the size of the brush.
 
