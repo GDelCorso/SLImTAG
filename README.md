@@ -130,6 +130,7 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 ### Potential additional features
 - [ ] Different brush shapes (square)
 - [ ] Rectangle/polygonal "add to mask" tool
+- [ ] Define plugings for different features to mantain the system lightweight and make it adaptable to user experience
 
 ### Extension to bio-medical fields
 - [ ] Import MedSAM and modify the MagicWand wrapper
