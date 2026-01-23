@@ -56,7 +56,7 @@ python3 -m venv slimtag-venv
 source slimtag-venv/bin/activate
 ```
 
-on Windows
+> on Windows
 ```bash
 slimtag-venv\Scripts\activate
 ```
@@ -73,7 +73,7 @@ python3 -m pip install -r requirements.txt
 mkdir models
 ```
 
-Then, download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
+> Then, download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
 
 ```bash
 wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
