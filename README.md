@@ -127,7 +127,7 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 - [ ] Convert hardcoded parameters to argparse arguments
 - [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
 - [ ] To consider: in smoothing tool, add toggle for locking mask at image border, so that it is not erased (useful if mask is background)
-- [ ] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
+- [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 
 ### Potential additional features
 - [ ] Different brush shapes (square)

@@ -103,6 +103,8 @@ class SegmentationApp(ctk.CTk):
         file_menu.add_command(label="Save Mask", command=self.save_mask, accelerator="Ctrl+S")
         file_menu.add_separator()
         file_menu.add_command(label="Clear Mask", command=self.clear_active_mask)
+        file_menu.add_separator()
+        file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Q")
         self.menu_bar.add_cascade(label="File", menu=file_menu)
 
 
@@ -230,6 +232,9 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Left>", lambda e: self.pan_view(-20, 0))
         self.bind("<Right>", lambda e: self.pan_view(20, 0))
         
+        # Bind "close window" to quit_program
+        self.protocol("WM_DELETE_WINDOW", self.quit_program)
+        
         
         # SHORTCUT KEYS -------------------------------------------------------
         self.bind("<b>", lambda e: self.toggle_brush())
@@ -240,11 +245,12 @@ class SegmentationApp(ctk.CTk):
         self.bind("<C>", lambda e: self.toggle_cc_mode())
         self.bind("<s>", lambda e: self.toggle_smoothing())
         self.bind("<S>", lambda e: self.toggle_smoothing())
-        self.bind("<z>", lambda e: self.undo()) 
+        self.bind("<z>", lambda e: self.undo())
         self.bind("<Z>", lambda e: self.undo())
         self.bind("<Control-S>", lambda e: self.save_mask())
         self.bind("<Control-s>", lambda e: self.save_mask())
-        
+        self.bind("<q>", lambda e: self.quit_program())
+        self.bind("<Q>", lambda e: self.quit_program())
         
         
         
@@ -326,6 +332,9 @@ class SegmentationApp(ctk.CTk):
         for b in self.all_action_buttons:
             b.configure(state=state)
 
+    def quit_program(self):
+        self.quit()
+        self.destroy()
 
 
     
