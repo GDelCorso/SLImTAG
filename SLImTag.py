@@ -98,15 +98,20 @@ class SegmentationApp(ctk.CTk):
         
         # Menu File (top menu)
         file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        file_menu.add_command(label="Import Image", command=self.load_image)
-        file_menu.add_command(label="Load Mask", command=self.load_mask)
-        file_menu.add_command(label="Save Mask", command=self.save_mask, accelerator="Ctrl+S")
-        file_menu.add_separator()
-        file_menu.add_command(label="Clear Mask", command=self.clear_active_mask)
-        file_menu.add_separator()
         file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Q")
         self.menu_bar.add_cascade(label="File", menu=file_menu)
-
+        # Menu Image (top menu)
+        image_menu = tk.Menu(self.menu_bar, tearoff=0)
+        image_menu.add_command(label="Import image", command=self.load_image)
+        self.menu_bar.add_cascade(label="Image", menu=image_menu)
+        # Menu Mask (top menu)
+        mask_menu = tk.Menu(self.menu_bar, tearoff=0)
+        mask_menu.add_command(label="Load Mask", command=self.load_mask)
+        mask_menu.add_command(label="Save Mask", command=self.save_mask, accelerator="Ctrl+S")
+        mask_menu.add_separator()
+        mask_menu.add_command(label="Clear Mask", command=self.clear_active_mask)
+        self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
+        
 
         # STATE ---------------------------------------------------------------
         self.image_orig = None
