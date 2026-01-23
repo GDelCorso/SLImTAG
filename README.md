@@ -39,53 +39,55 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 ## Installation
 
 1. Clone the repository
-```bash
-git clone https://github.com/GDelCorso/SLImTAG
-cd SLImTAG
-```
+
+    ```bash
+    git clone https://github.com/GDelCorso/SLImTAG
+    cd SLImTAG
+    ```
 
 2. Create a virtual environment
 
-```bash
-python3 -m venv slimtag-venv
-```
+    ```bash
+    python3 -m venv slimtag-venv
+    ```
 
 3. Activate the environment: on Mac/Linux
 
-```bash
-source slimtag-venv/bin/activate
-```
+    ```bash
+    source slimtag-venv/bin/activate
+    ```
 
-  on Windows
-```bash
-slimtag-venv\Scripts\activate
-```
+    on Windows
+
+    ```bash
+    slimtag-venv\Scripts\activate
+    ```
 
 4. Install dependencies:
 
-```bash
-python3 -m pip install -r requirements.txt
-```
+    ```bash
+    python3 -m pip install -r requirements.txt
+    ```
 
 5. Download SAM's weights and let SLImTAG access them. To do so, create a folder called `models` in SLImTAG's root folder:
 
-```bash
-mkdir models
-```
+    ```bash
+    mkdir models
+    ```
 
-  Then, download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
+    Then, download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
 
-```bash
-wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
-```
+    ```bash
+    wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+    ```
 
 6. That's it! To run the program just do
 
-```bash
-python3 SLImTag.py
-```
+    ```bash
+    python3 SLImTag.py
+    ```
 
-from the project folder, with the virtual environment activated.
+    from the project folder, with the virtual environment activated.
 
 ---
 
