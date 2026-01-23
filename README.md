@@ -69,13 +69,7 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
     python3 -m pip install -r requirements.txt
     ```
 
-5. Download SAM's weights and let SLImTAG access them. To do so, create a folder called `models` in SLImTAG's root folder:
-
-    ```bash
-    mkdir models
-    ```
-
-    Then, download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
+5. Download SAM's weights: download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
 
     ```bash
     wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
