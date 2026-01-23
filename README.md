@@ -114,6 +114,8 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 
 The slider under the `Brush` button determines the size of the brush.
 
+By default, tools act on the mask layer by overriding the content. The "Only add on empty" checkbox prevents this behaviour by allowing tools only to apply the active mask on regions where there are no other masks.
+
 ### Mouse Actions
 
 See table above for the left/right click actions associated with each tool. For all of them, <kbd>Shift</kbd>+left click is equivalent to right click.
