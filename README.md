@@ -140,6 +140,8 @@ Load Mask: Loads a PNG representing a mask, extracting up to 20 unique colors as
 - [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
 - [ ] To consider: in smoothing tool, add toggle for locking mask at image border, so that it is not erased (useful if mask is background)
 - [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
+- [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
+- [ ] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 
 ### Potential additional features
 - [ ] Different brush shapes (square)
