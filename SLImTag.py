@@ -16,11 +16,11 @@ import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion
 
 # Image manipulation and TkIntert (ImageTk)
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
-from tkinter import filedialog, ttk, simpledialog, messagebox
+from tkinter import filedialog, simpledialog, messagebox
 import customtkinter as ctk
 
 # Torch and SAM (Segment anything model)
@@ -92,10 +92,46 @@ class SegmentationApp(ctk.CTk):
         super().__init__()
         self.title(f"SLImTAG ({MODEL_TYPE})")
         self.geometry("1300x900")
+
+        # STATE ---------------------------------------------------------------
+        self.image_orig = None
+        self.mask_orig = None
+        self.mask_disp = None
         
+        # Define the zoom status
+        self.zoom = 1.0
+        self.offset_x = 0
+        self.offset_y = 0
+        self._pan_start = None
+
+        # Original values for rescale
+        self.orig_h = None
+        self.orig_w = None
+
+        self.mask_labels = {}
+        self.mask_colors = {}
+        self.mask_widgets = {}
+        self.mask_widget_bg = None # store og background
+        self.active_mask_id = None
+        
+        self.only_on_empty = tk.BooleanVar(value=False)
+ 
+        self.brush_active = False
+        self.magic_mode = False
+        self.cc_mode = False 
+        self.smoothing_active = False
+        
+        self.last_brush_pos = None
+
+        self.brush_size = 30
+        self.undo_stack = []
+        
+
+        # UI ------------------------------------------------------------------
+        
+        # Top Menu
         self.menu_bar = tk.Menu(self)
         self.config(menu=self.menu_bar)
-        
         # Menu File (top menu)
         file_menu = tk.Menu(self.menu_bar, tearoff=0)
         file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Ctrl+Q")
@@ -119,104 +155,70 @@ class SegmentationApp(ctk.CTk):
         mask_menu.add_command(label="Load mask", command=self.load_mask)
         mask_menu.add_command(label="Save mask", command=self.save_mask, accelerator="Ctrl+S")
         mask_menu.add_separator()
-        mask_menu.add_command(label="Clear mask", command=self.clear_active_mask)
+        mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
         self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
         
-
-        # STATE ---------------------------------------------------------------
-        self.image_orig = None
-        self.mask_orig = None
-        self.mask_disp = None
+        panels_width = 250
+        # Left panel for tools
+        self.tools_panel = ctk.CTkFrame(self, width=panels_width)
+        self.tools_panel.pack(side="left", fill="y")
         
-        # Define the zoom status
-        self.zoom = 1.0
-        self.offset_x = 0
-        self.offset_y = 0
-        self._pan_start = None
-
-        # Original values for rescale
-        self.orig_h = None
-        self.orig_w = None
-
-        self.mask_labels = {}
-        self.mask_colors = {}
-        self.active_mask_id = None
-        
-        self.only_on_empty = tk.BooleanVar(value=False)
- 
-        self.brush_active = False
-        self.magic_mode = False
-        self.cc_mode = False 
-        self.smoothing_active = False
-        
-        self.last_brush_pos = None
-
-        self.brush_size = 30
-        self.undo_stack = []
-        
-
-        # UI ------------------------------------------------------------------
-        # Main canvas for image + masks
+        # Main canvas
         self.canvas = ctk.CTkCanvas(self, bg="black")
         self.canvas.pack(side="left", fill="both", expand=True)
 
-        # Right panel for controls
-        self.panel = ctk.CTkFrame(self, width=250)
-        self.panel.pack(side="right", fill="y")
-
+        # Right panel for masks
+        self.masks_panel = ctk.CTkFrame(self, width=panels_width)
+        self.masks_panel.pack(side="right", fill="y")
 
         # Mask controls
-        # self.new_label = ctk.CTkEntry(self.panel, placeholder_text="Mask name")
-        # self.new_label.pack(padx=10, pady=5, fill="x")
-        ctk.CTkButton(self.panel, text="Add new mask", command=self.add_mask).pack(fill="x", padx=10)
+        # Add mask button
+        ctk.CTkButton(self.masks_panel, text="Add new mask", command=self.add_mask).pack(fill="x", padx=10, pady=(10,5))
         
-        # Color preview for currently selected mask
-        self.color_preview = tk.Canvas(self.panel, width=40, height=20, bg="black", highlightthickness=1)
-        self.color_preview.pack(padx=10, pady=(0,5), fill="x")
-         
-        # Combobox to select active mask
-        self.combo = ttk.Combobox(self.panel, state="readonly")
-        self.combo.pack(padx=10, pady=5, fill="x")
-        self.combo.bind("<<ComboboxSelected>>", self.change_mask)
-         
-        # Spacer after combobox
-        self.panel_spacer = ctk.CTkFrame(self.panel, height=20, fg_color="transparent")
-        self.panel_spacer.pack()
-
-
-        # Undo button
-        ctk.CTkButton(self.panel, text="Undo [Ctrl-Z]", command=self.undo).pack(fill="x", padx=10, pady=5)
-
+        # ScrollFrame for mask list
+        self.mask_list_frame = ctk.CTkScrollableFrame(self.masks_panel)
+        self.mask_list_frame.pack(fill="both", expand=True, padx=10, pady=(5,10))
 
         # Tool buttons
-        self.brush_btn = ctk.CTkButton(self.panel, text="Brush [B]", command=self.toggle_brush)
-        self.brush_btn.pack(fill="x", padx=10, pady=5)
-        self.brush_slider = ctk.CTkSlider(self.panel, from_=5, to=100,
-                                          command=lambda v: setattr(self,"brush_size",int(v)))
+        # Frame for buttons
+        self.tools_btn_frame = ctk.CTkFrame(self.tools_panel)
+        self.tools_btn_frame.pack(padx=10, pady=(10, 5), fill="both")
+        # Frame for tool options
+        self.tool_opt_frame = ctk.CTkFrame(self.tools_panel)
+        self.tool_opt_frame.pack(padx=10, pady=5, fill="both", expand=True)
+        
+        self.brush_btn = ctk.CTkButton(self.tools_btn_frame, text="Brush [B]", command=self.toggle_brush)
+        self.brush_btn.pack(fill="x", padx=10, pady=(10, 5))
+        
+        ctk.CTkLabel(self.tool_opt_frame, text="Brush size", font=ctk.CTkFont(size=12), fg_color="transparent", anchor="w").pack(fill="x", padx=10, pady=(8,2))
+        self.brush_slider = ctk.CTkSlider(self.tool_opt_frame, from_=5, to=100, command=lambda v: setattr(self,"brush_size",int(v)))
         self.brush_slider.set(self.brush_size)
-        self.brush_slider.pack(fill="x", padx=10)
+        self.brush_slider.pack(fill="x", padx=10, pady=(0,8))
+        
 
-        self.magic_btn = ctk.CTkButton(self.panel, text="Magic wand [M]", command=self.toggle_magic)
+        self.magic_btn = ctk.CTkButton(self.tools_btn_frame, text="Magic wand [M]", command=self.toggle_magic)
         self.magic_btn.pack(fill="x", padx=10, pady=5)
 
-        self.smoothing_btn = ctk.CTkButton(self.panel, text="Smoothing [S]", command=self.toggle_smoothing)
+        self.smoothing_btn = ctk.CTkButton(self.tools_btn_frame, text="Smoothing [S]", command=self.toggle_smoothing)
         self.smoothing_btn.pack(fill="x", padx=10, pady=5)
 
-        self.cc_btn = ctk.CTkButton(self.panel, text="Connected component [C]", command=self.toggle_cc_mode)
-        self.cc_btn.pack(fill="x", padx=10)
-
+        self.cc_btn = ctk.CTkButton(self.tools_btn_frame, text="Connected component [C]", command=self.toggle_cc_mode)
+        self.cc_btn.pack(fill="x", padx=10, pady=(5, 10))
+        
+        # Buttons configuration
         self.brush_btn.configure(fg_color=TOOL_OFF_COLOR)
         self.magic_btn.configure(fg_color=TOOL_OFF_COLOR)
         self.smoothing_btn.configure(fg_color=TOOL_OFF_COLOR)
         self.cc_btn.configure(fg_color=TOOL_OFF_COLOR)
-        
         self.all_action_buttons = [self.brush_btn, self.magic_btn, self.cc_btn, self.smoothing_btn]
         self.set_controls_state(False) # Deactivate all buttons
         
-        self.only_empty_btn = ctk.CTkCheckBox(self.panel, text="Only add on empty [✓]", variable=self.only_on_empty)
+        # Toggle for only empty
+        self.only_empty_btn = ctk.CTkSwitch(self.tools_panel, text="Only add on empty", variable=self.only_on_empty)
         self.only_empty_btn.pack(fill="x", padx=10, pady=5)
 
-
+        # Undo button
+        ctk.CTkButton(self.tools_panel, text="Undo [Ctrl-Z]", command=self.undo).pack(fill="x", padx=10, pady=(5, 10))
 
         # SAM -----------------------------------------------------------------
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -270,9 +272,7 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-s>", lambda e: self.save_mask())
         self.bind("<Control-q>", lambda e: self.quit_program())
         self.bind("<Control-Q>", lambda e: self.quit_program())
-        
-        
-        
+
 
     #%% AUX METHODS  ----------------------------------------------------------
     def update_display(self):
@@ -296,21 +296,6 @@ class SegmentationApp(ctk.CTk):
             overlay[self.mask_disp==mid] = [*c, 150]
         self.tk_ov = ImageTk.PhotoImage(Image.fromarray(overlay))
         self.canvas.create_image(self.offset_x,self.offset_y,anchor="nw", image=self.tk_ov)
-        self.update_mask_color_preview()
-        
-        
-    def update_mask_color_preview(self):
-        '''
-        Update color preview of active mask.
-        '''
-        
-        self.color_preview.delete("all")
-        if self.active_mask_id is None:
-            return
-        c = self.mask_colors.get(self.active_mask_id, (0,0,0))
-        hex_color = "#%02x%02x%02x" % c
-        self.color_preview.create_rectangle(0, 0, 40, 20, fill=hex_color, outline="")
-        
         
     def update_button_colors(self):
         '''
@@ -355,8 +340,6 @@ class SegmentationApp(ctk.CTk):
         self.quit()
         self.destroy()
 
-
-    
     #%% TOOL BUTTONS ----------------------------------------------------------
     # UNDO --------------------------------------------------------------------
     def push_undo(self):
@@ -402,100 +385,160 @@ class SegmentationApp(ctk.CTk):
         if not name:  # User cancelled or empty
             return
         
-        mid = max(self.mask_labels.keys(), default=0) + 1
+        #mid = max(self.mask_labels.keys(), default=0) + 1
+        mid = min([i+1 for i in range(MAX_MASKS) if i+1 not in self.mask_labels.keys()])
         self.mask_labels[mid] = name
         self.mask_colors[mid] = HIGH_CONTRAST_COLORS[mid-1]
-        self.active_mask_id = mid
-        self.combo["values"] = [f"{i}:{l}" for i,l in self.mask_labels.items()]
-        self.combo.current(len(self.mask_labels)-1)
-        self.update_mask_color_preview()
+        # self.active_mask_id = mid
+        
+        self.mask_widgets[mid] = self.create_mask_widget(mid)
+        self.mask_widgets[mid].pack(fill="x", expand=True)
+        self.change_mask(target_id=mid)
 
+        self.set_controls_state(True) # activate buttons if there is at least one mask
+    
+    def create_mask_widget(self, mid):
+        circle_size = 21
+        mask_frame = ctk.CTkFrame(self.mask_list_frame)
+        if not self.mask_widget_bg: # store original color
+            self.mask_widget_bg = mask_frame.cget("fg_color")
+        color_circle = Image.new("RGBA", (circle_size+1, circle_size+1), (0, 0, 0, 0))
+        color_circle_draw = ImageDraw.Draw(color_circle)
+        color_circle_draw.ellipse((0, 0, circle_size, circle_size), fill=self.mask_colors[mid])
+        mask_crc = ctk.CTkLabel(mask_frame, text="", image=ctk.CTkImage(color_circle, size=(circle_size+1, circle_size+1)))
+        mask_crc.grid(row=0, column=0, padx=(10,5), pady=10)
+        mask_lbl = ctk.CTkLabel(mask_frame, text=f"{mid}: {self.mask_labels[mid]}", anchor="w")
+        mask_lbl.grid(row=0, column=1, sticky="ew", padx=5, pady=10)
+        ctk.CTkButton(mask_frame, text="×",
+                      font=ctk.CTkFont(size=18,weight="bold"),
+                      width=12, height=12,
+                      fg_color="#FF0000",
+                      hover_color="#CC0000",
+                      text_color="white",
+                      command=lambda mid=mid: self.clear_mask(mid)).grid(row=0, column=2, padx=(5,10), pady=10)
+        mask_frame.grid_columnconfigure(1, weight=1)
+        mask_frame.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
+        mask_crc.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
+        mask_lbl.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
+        if 1 <= mid <= 9:
+            self.bind(f"<Key-{mid}>", lambda e, tid=mid: self.change_mask(e, tid))
+        return mask_frame
 
-
-    def change_mask(self, e):
+    def change_mask(self, e=None, target_id=None):
         '''
         Changes the currently active mask based on the user selection in the 
         combo box.
         '''
         # Retrieves the mask ID corresponding to the current selection
-        self.active_mask_id = list(self.mask_labels.keys())[self.combo.current()]
+        if self.active_mask_id:
+            self.mask_widgets[self.active_mask_id].configure(fg_color=self.mask_widget_bg)
+        self.active_mask_id = target_id
+        # Change appearance of mask row in mask list
+        self.mask_widgets[target_id].configure(fg_color="white")
         # Updates the UI buttons’ colors
         self.update_button_colors()
-        # Updates the small color preview rectangle
-        self.update_mask_color_preview()
+        self.set_controls_state(True)
+
+    # CLEAR MASK --------------------------------------------------------------
+    def clear_mask(self, mid):
+        '''
+        Deletes all pixels of the mask with mask id mid, removes its label and 
+        color, updates the combo box to reflect remaining masks, and refreshes 
+        the display and color preview.
+        '''
+        # Check if an image is loaded
+        if not self.require_image():
+            return
+        
+        self.deactivate_tools()
+        if self.mask_orig is None: return
+        self.push_undo()
+        self.mask_orig[self.mask_orig == mid] = 0
+        del self.mask_labels[mid]
+        del self.mask_colors[mid]
+        self.mask_widgets[mid].destroy()
+        del self.mask_widgets[mid]
+        
+        if 1 <= mid <= 9:
+            self.unbind(f"<Key-{mid}>")
+
+        if self.active_mask_id == mid:
+            self.active_mask_id = None
+        
+        if len(self.mask_labels) == 0 or not self.active_mask_id: # disable all buttons if there are no masks
+            self.set_controls_state(False)
+        self.update_display()
+    
+    def clear_active_mask(self):
+        self.clear_mask(self.active_mask_id)
 
 
     # BUTTON TOGGLES ----------------------------------------------------------
     def toggle_brush(self):
         '''
-        Activates or deactivates the brush tool and updates the button colors 
-        and mask preview.
+        Activates or deactivates the brush tool.
         '''
         # Check if an image is loaded
         if not self.require_image():
             return
         
-        if not self.brush_active:
-            self.deactivate_tools()
-            self.brush_active = True
-        else:
-            self.brush_active = False
-        self.update_button_colors()
-        self.update_mask_color_preview()
+        if self.brush_btn.cget('state') != "disabled":
+            if not self.brush_active:
+                self.deactivate_tools()
+                self.brush_active = True
+            else:
+                self.brush_active = False
+            self.update_button_colors()
 
 
     def toggle_cc_mode(self):
         '''
-        Activates or deactivates the connected component tool and refreshes the 
-        UI to reflect its state.
+        Activates or deactivates the connected component tool.
         '''
         # Check if an image is loaded
         if not self.require_image():
             return
         
-        if not self.cc_mode:
-            self.deactivate_tools()
-            self.cc_mode = True
-        else:
-            self.cc_mode = False
-        self.update_button_colors()
-        self.update_mask_color_preview()
+        if self.cc_btn.cget('state') != "disabled":
+            if not self.cc_mode:
+                self.deactivate_tools()
+                self.cc_mode = True
+            else:
+                self.cc_mode = False
+            self.update_button_colors()
 
 
     def toggle_magic(self):
         '''
-        Activates or deactivates the magic wand tool and updates the button 
-        colors and mask preview accordingly.
+        Activates or deactivates the magic wand tool.
         '''
         # Check if an image is loaded
         if not self.require_image():
             return
         
-        if not self.magic_mode:
-            self.deactivate_tools()
-            self.magic_mode = True
-        else:
-            self.magic_mode = False
-        self.update_button_colors()
-        self.update_mask_color_preview()
-
+        if self.magic_btn.cget('state') != "disabled":
+            if not self.magic_mode:
+                self.deactivate_tools()
+                self.magic_mode = True
+            else:
+                self.magic_mode = False
+            self.update_button_colors()
 
     def toggle_smoothing(self):
         '''
-        Activates or deactivates the smoothing tool and updates the interface 
-        to show its current status.
+        Activates or deactivates the smoothing tool.
         '''
         # Check if an image is loaded
         if not self.require_image():
             return
         
-        if not self.smoothing_active:
-            self.deactivate_tools()
-            self.smoothing_active = True
-        else:
-            self.smoothing_active = False
-        self.update_button_colors()
-        self.update_mask_color_preview()
+        if self.smoothing_btn.cget('state') != "disabled":
+            if not self.smoothing_active:
+                self.deactivate_tools()
+                self.smoothing_active = True
+            else:
+                self.smoothing_active = False
+            self.update_button_colors()
 
 
 
@@ -529,17 +572,15 @@ class SegmentationApp(ctk.CTk):
         self.mask_orig = np.zeros((new_h, new_w), np.uint8)
         self.sam.set_image(np.array(self.image_orig))
         
-        # RESET MASKS ---------------------------------------------------------
+        # RESET MASKS
         self.mask_labels.clear()
         self.mask_colors.clear()
         self.active_mask_id = None
-        self.combo["values"] = []
-        self.combo.set("")
+
+        # RESET HISTORY
         self.undo_stack.clear()
             
-        self.set_controls_state(True)
         self.update_display()
-        
 
     def load_mask(self):
         """
@@ -579,8 +620,11 @@ class SegmentationApp(ctk.CTk):
                 self.mask_labels[l] = f"mask_{l}"
                 idx = l * 3
                 self.mask_colors[l] = tuple(palette[idx:idx+3])
+                self.mask_widgets[l] = self.create_mask_widget(l)
+                self.mask_widgets[l].pack(fill="x", expand=True)
     
-            self.active_mask_id = labels[0] if len(labels) > 0 else None
+            if len(labels) > 0:
+                self.change_mask(target_id=labels[0])
     
         # CASE 2: Generic RGB PNG
         else:
@@ -610,9 +654,12 @@ class SegmentationApp(ctk.CTk):
                 mask[np.all(arr == color, axis=-1)] = i
                 self.mask_labels[i] = f"mask_{i}"
                 self.mask_colors[i] = color
+                self.mask_widgets[i] = self.create_mask_widget(i)
+                self.mask_widgets[i].pack(fill="x", expand=True)
     
             self.mask_orig = mask
-            self.active_mask_id = 1 if unique_colors else None
+            if unique_colors:
+                self.change_mask(target_id=1)
     
         # SCale
         if MAX_RES is not None:
@@ -620,16 +667,7 @@ class SegmentationApp(ctk.CTk):
                 (self.image_orig.size[0], self.image_orig.size[1]), Image.NEAREST
             ))
     
-        # Update UI
-        values = [f"{i}:{l}" for i, l in self.mask_labels.items()]
-        self.combo["values"] = values
-        if self.mask_labels:
-            self.combo.current(0)
-        else:
-            self.combo.set("")
-    
         self.update_display()
-        self.update_mask_color_preview()
 
     
     def save_mask(self, alpha=0.6):
@@ -664,9 +702,9 @@ class SegmentationApp(ctk.CTk):
     #%% MOUSE EVENTS ----------------------------------------------------------
     def on_canvas_left(self, e):
         '''
-        Handles left-clicks on the canvas, performing the active tool’s action 
+        Handles left-clicks on the canvas, performing the active tool's action 
         (brush, magic wand, connected component, or smoothing) and using Shift 
-        to modify behavior.
+        to modify behaviour.
         '''
         shift_pressed = (e.state & 0x0001) != 0
         self._prev_brush_pos = None
@@ -706,7 +744,7 @@ class SegmentationApp(ctk.CTk):
     
     def on_canvas_right(self, e):
         '''
-        Handles right-clicks on the canvas, applying the active tool’s removal 
+        Handles right-clicks on the canvas, applying the active tool's removal 
         or erosion action without toggling tools.
         '''
         if self.smoothing_active:
@@ -823,12 +861,6 @@ class SegmentationApp(ctk.CTk):
         Adjusts the zoom level of the displayed image based on mouse wheel 
         input and refreshes the display.
         '''
-        # # Check if an image is loaded
-        # if not self.require_image():
-        #     return
-        
-        # self.zoom *= 1.1 if e.delta>0 else 0.9
-        # self.update_display()
         if e.delta > 0:
             self.zoom_in(e)
         else:
@@ -946,37 +978,6 @@ class SegmentationApp(ctk.CTk):
             
         self.update_display()
 
-
-    # CLEAR MASK --------------------------------------------------------------
-    def clear_active_mask(self):
-        '''
-        Deletes all pixels of the currently active mask, removes its label and 
-        color, updates the combo box to reflect remaining masks, and refreshes 
-        the display and color preview.
-        '''
-        # Check if an image is loaded
-        if not self.require_image():
-            return
-        
-        self.deactivate_tools()
-        if self.active_mask_id is None or self.mask_orig is None: return
-        self.push_undo()
-        self.mask_orig[self.mask_orig == self.active_mask_id] = 0
-        del self.mask_labels[self.active_mask_id]
-        del self.mask_colors[self.active_mask_id]
-
-        values = [f"{i}:{l}" for i,l in self.mask_labels.items()]
-        self.combo["values"] = values
-        if self.mask_labels:
-            self.active_mask_id = list(self.mask_labels.keys())[0]
-            self.combo.current(0)
-        else:
-            self.active_mask_id = None
-            self.combo.set('')
-        self.update_display()
-        self.update_mask_color_preview()
-        
-
     # CONNECTED COMPONENT -----------------------------------------------------
     def get_connected_component(self, mask, start_y, start_x, target_id):
         '''
@@ -1059,8 +1060,6 @@ class SegmentationApp(ctk.CTk):
         else:
             self.mask_orig[comp_smooth] = self.active_mask_id
         self.update_display()
-
-
 
 #%% Main cycle
 if __name__ == "__main__":

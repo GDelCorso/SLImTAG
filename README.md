@@ -93,9 +93,9 @@ The first step is to load an image (in PNG or JPG) using `Image > Import Image` 
 
 ### Mask Actions
 
-Use the `Add new mask` button to create a new mask with a custom label. The dropdown menu selects the active mask, i.e. the one on which the tools are going to act. Up to 20 masks can be defined for a file.
+Use the `Add new mask` button to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear i a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9.
 
-`Mask > Clear Mask` will REMOVE all the regions marked with the current mask, and also remove the mask from the list. **This action cannot be undone.**
+Click on the small `×` button next to a mask to remove ALL the regions marked with it, and also remove the mask from the list. The active mask can be also removed via the menu `Mask > Clear active mask`. **This action cannot be undone.**
 
 `Mask > Save Mask` saves the mask as an indexed PNG file, and a copy of the original image with a semi-transparent PNG overlay of the masks.
 
@@ -146,7 +146,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] To consider: in smoothing tool, add toggle for locking mask at image border, so that it is not erased (useful if mask is background)
 - [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
-- [ ] When a mask is removed, a new mask additions should be placed on the first empty value of the list
+- [x] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 - [ ] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 - [ ] Allow "Clean Mask" undo
 - [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
