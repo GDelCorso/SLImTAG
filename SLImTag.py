@@ -63,6 +63,14 @@ MAGIC_ON_COLOR = "#FF9800"   # orange
 CC_ON_COLOR = "#9C27B0"      # purple
 SMOOTH_ON_COLOR = "#2196F3"  # blue
 
+STATUS_SYMBOL = "●"
+STATUS_COLOR = {
+    "ready":  ("#2ecc71", "#2ecc71"),  # green
+    "loading":("#f1c40f", "#f1c40f"),  # yellow
+    "error":  ("#e74c3c", "#e74c3c"),  # red
+    "idle":   ("#95a5a6", "#95a5a6"),  # gray
+    }
+
 
 #%% SAM parameters
 # Choose the model type
@@ -114,7 +122,7 @@ class SegmentationApp(ctk.CTk):
         self.mask_widget_bg = None # store og background
         self.active_mask_id = None
         
-        self.only_on_empty = tk.BooleanVar(value=False)
+        self.only_on_empty = tk.BooleanVar(self, value=False)
  
         self.brush_active = False
         self.magic_mode = False
@@ -162,49 +170,67 @@ class SegmentationApp(ctk.CTk):
         panels_width = 250
         # Left panel for tools
         self.tools_panel = ctk.CTkFrame(self, width=panels_width)
-        self.tools_panel.pack(side="left", fill="y")
+        self.tools_panel.grid(row=0, column=0, sticky="nsew")
         
         # Main canvas
         self.canvas = ctk.CTkCanvas(self, bg="black")
-        self.canvas.pack(side="left", fill="both", expand=True)
-
+        self.canvas.grid(row=0, column=1, sticky="nsew")
+        
         # Right panel for masks
         self.masks_panel = ctk.CTkFrame(self, width=panels_width)
-        self.masks_panel.pack(side="right", fill="y")
+        self.masks_panel.grid(row=0, column=2, sticky="nsew")
+        
+        # Statusbar
+        
+        self.statusbar = ctk.CTkFrame(self, height=24, fg_color=("gray92", "gray14"))
+        self.statusbar.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=0, pady=0)
+
+        self.status_icon = ctk.CTkLabel(self.statusbar, text=STATUS_SYMBOL, text_color=STATUS_COLOR["idle"], width=14)
+        self.status_icon.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(0, 2))
+        self.status_label = ctk.CTkLabel(self.statusbar, text="")
+        self.status_label.grid(row=0, column=1, sticky="w", padx=(4, 0))
+        
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
 
         # Mask controls
         # Add mask button
-        ctk.CTkButton(self.masks_panel, text="Add new mask", command=self.add_mask).pack(fill="x", padx=10, pady=(10,5))
+        ctk.CTkButton(self.masks_panel, text="Add new mask", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
         
         # ScrollFrame for mask list
         self.mask_list_frame = ctk.CTkScrollableFrame(self.masks_panel)
-        self.mask_list_frame.pack(fill="both", expand=True, padx=10, pady=(5,10))
+        self.mask_list_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        
+        self.masks_panel.grid_rowconfigure(1, weight=1)
 
         # Tool buttons
         # Frame for buttons
         self.tools_btn_frame = ctk.CTkFrame(self.tools_panel)
-        self.tools_btn_frame.pack(padx=10, pady=(10, 5), fill="both")
+        self.tools_btn_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
         # Frame for tool options
         self.tool_opt_frame = ctk.CTkFrame(self.tools_panel)
-        self.tool_opt_frame.pack(padx=10, pady=5, fill="both", expand=True)
+        self.tool_opt_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         
         self.brush_btn = ctk.CTkButton(self.tools_btn_frame, text="Brush [B]", command=self.toggle_brush)
-        self.brush_btn.pack(fill="x", padx=10, pady=(10, 5))
+        self.brush_btn.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
         
-        ctk.CTkLabel(self.tool_opt_frame, text="Brush size", font=ctk.CTkFont(size=12), fg_color="transparent", anchor="w").pack(fill="x", padx=10, pady=(8,2))
+        ctk.CTkLabel(self.tool_opt_frame, text="Brush size", font=ctk.CTkFont(size=11), fg_color="transparent", anchor="w").grid(row=0, column=0, sticky="ew", padx=10, pady=(8,2))
         self.brush_slider = ctk.CTkSlider(self.tool_opt_frame, from_=5, to=100, command=lambda v: setattr(self,"brush_size",int(v)))
         self.brush_slider.set(self.brush_size)
-        self.brush_slider.pack(fill="x", padx=10, pady=(0,8))
+        self.brush_slider.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 8))
         
 
         self.magic_btn = ctk.CTkButton(self.tools_btn_frame, text="Magic wand [M]", command=self.toggle_magic)
-        self.magic_btn.pack(fill="x", padx=10, pady=5)
+        self.magic_btn.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
 
         self.smoothing_btn = ctk.CTkButton(self.tools_btn_frame, text="Smoothing [S]", command=self.toggle_smoothing)
-        self.smoothing_btn.pack(fill="x", padx=10, pady=5)
+        self.smoothing_btn.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
         self.cc_btn = ctk.CTkButton(self.tools_btn_frame, text="Connected component [C]", command=self.toggle_cc_mode)
-        self.cc_btn.pack(fill="x", padx=10, pady=(5, 10))
+        self.cc_btn.grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
+        
+        self.tools_btn_frame.grid_columnconfigure(0, weight=1)
+        self.tool_opt_frame.grid_columnconfigure(0, weight=1)
         
         # Buttons configuration
         self.brush_btn.configure(fg_color=TOOL_OFF_COLOR)
@@ -215,11 +241,12 @@ class SegmentationApp(ctk.CTk):
         self.set_controls_state(False) # Deactivate all buttons
         
         # Toggle for only empty
-        self.only_empty_btn = ctk.CTkSwitch(self.tools_panel, text="Only add on empty", variable=self.only_on_empty)
-        self.only_empty_btn.pack(fill="x", padx=10, pady=5)
+        ctk.CTkSwitch(self.tools_panel, text="Only add on empty", variable=self.only_on_empty).grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
         # Undo button
-        ctk.CTkButton(self.tools_panel, text="Undo [Ctrl-Z]", command=self.undo).pack(fill="x", padx=10, pady=(5, 10))
+        ctk.CTkButton(self.tools_panel, text="Undo [Ctrl-Z]", command=self.undo).grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
+
+        self.tools_panel.grid_rowconfigure(1, weight=1)
 
         # SAM -----------------------------------------------------------------
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -273,6 +300,9 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-s>", lambda e: self.save_mask())
         self.bind("<Control-q>", lambda e: self.quit_program())
         self.bind("<Control-Q>", lambda e: self.quit_program())
+        
+        # Finally, set status to "Ready"
+        self.set_status("ready", "Ready")
 
 
     #%% AUX METHODS  ----------------------------------------------------------
@@ -337,7 +367,21 @@ class SegmentationApp(ctk.CTk):
         for b in self.all_action_buttons:
             b.configure(state=state)
 
+    def set_status(self, state, text):
+        """
+        Set icon color and text for status bar.
+        """
+        try:
+            self.status_icon.configure(text_color=STATUS_COLOR[state])
+        except KeyError:
+            self.status_icon.configure(text_color=STATUS_COLOR["idle"])
+        self.status_label.configure(text=text)
+        self.update_idletasks()
+
     def quit_program(self):
+        """
+        Quit program.
+        """
         self.quit()
         self.destroy()
 
@@ -553,11 +597,13 @@ class SegmentationApp(ctk.CTk):
         '''
         Load a .png or .jpg image and define and empty mask on it.
         '''
+
         self.deactivate_tools()
         p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
         if not p:
             return
-        
+
+        self.set_status("loading", "Loading image...")
         img = Image.open(p).convert("RGB")
         self.orig_w, self.orig_h = img.size
         
@@ -587,6 +633,7 @@ class SegmentationApp(ctk.CTk):
         # RESET HISTORY
         self.undo_stack.clear()
             
+        self.set_status("ready", "Ready")
         self.update_display()
 
     def load_mask(self):

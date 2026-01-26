@@ -137,7 +137,8 @@ When **no** tool is selected, left click-and-drag to pan the image.
 
 ### Minor
 - [ ] Zoom on mouse location instead of top left corner
-- [ ] Add statusbar
+- [x] Add statusbar
+- [ ] Check statusbar bindings
 - [ ] Brush subraction and connected component currently don't work when "Only add on empty" is active
 - [ ] Implement argparse with "--no-sam" option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
