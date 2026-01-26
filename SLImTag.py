@@ -156,6 +156,7 @@ class SegmentationApp(ctk.CTk):
         mask_menu.add_command(label="Save mask", command=self.save_mask, accelerator="Ctrl+S")
         mask_menu.add_separator()
         mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
+        mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
         self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
         
         panels_width = 250
@@ -471,6 +472,11 @@ class SegmentationApp(ctk.CTk):
     
     def clear_active_mask(self):
         self.clear_mask(self.active_mask_id)
+    
+    def clear_all_masks(self):
+        mask_ids = list(self.mask_labels.keys())
+        for mid in mask_ids:
+            self.clear_mask(mid)
 
 
     # BUTTON TOGGLES ----------------------------------------------------------
@@ -573,9 +579,10 @@ class SegmentationApp(ctk.CTk):
         self.sam.set_image(np.array(self.image_orig))
         
         # RESET MASKS
-        self.mask_labels.clear()
-        self.mask_colors.clear()
-        self.active_mask_id = None
+        self.clear_all_masks()
+        # self.mask_labels.clear()
+        # self.mask_colors.clear()
+        # self.active_mask_id = None
 
         # RESET HISTORY
         self.undo_stack.clear()
@@ -598,13 +605,15 @@ class SegmentationApp(ctk.CTk):
     
         self.push_undo()
         ext = os.path.splitext(p)[1].lower()
-    
-        self.mask_labels.clear()
-        self.mask_colors.clear()
-        self.active_mask_id = None
-    
         if ext != ".png":
             return
+        
+        # RESET ALL MASKS
+        self.clear_all_masks()
+        # self.mask_labels.clear()
+        # self.mask_colors.clear()
+        # self.active_mask_id = None
+    
     
         img = Image.open(p)
     
