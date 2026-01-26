@@ -512,11 +512,12 @@ class SegmentationApp(ctk.CTk):
         if self.active_mask_id == mid:
             self.active_mask_id = None
         
-        if len(self.mask_labels) == 0 or not self.active_mask_id: # disable all buttons if there are no masks
+        if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
             self.set_controls_state(False)
         self.update_display()
     
     def clear_active_mask(self):
+        if self.active_mask_id is None: return
         self.clear_mask(self.active_mask_id)
     
     def clear_all_masks(self):
