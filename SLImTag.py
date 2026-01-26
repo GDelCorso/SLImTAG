@@ -454,13 +454,15 @@ class SegmentationApp(ctk.CTk):
         mask_crc.grid(row=0, column=0, padx=(10,5), pady=10)
         mask_lbl = ctk.CTkLabel(mask_frame, text=f"{mid}: {self.mask_labels[mid]}", anchor="w")
         mask_lbl.grid(row=0, column=1, sticky="ew", padx=5, pady=10)
-        ctk.CTkButton(mask_frame, text="×",
-                      font=ctk.CTkFont(size=18,weight="bold"),
-                      width=12, height=12,
-                      fg_color="#FF0000",
-                      hover_color="#CC0000",
-                      text_color="white",
-                      command=lambda mid=mid: self.clear_mask(mid)).grid(row=0, column=2, padx=(5,10), pady=10)
+        clear_btn = ctk.CTkButton(mask_frame, text="×",
+                                  font=ctk.CTkFont(size=18, weight="bold"),
+                                  width=12, height=12,
+                                  fg_color="transparent",
+                                  text_color="red",
+                                  command=lambda mid=mid: self.clear_mask(mid))
+        clear_btn.grid(row=0, column=2, padx=(5,10), pady=10)
+        clear_btn.bind("<Enter>", lambda e: clear_btn.configure(fg_color="#CC0000", text_color="white"))
+        clear_btn.bind("<Leave>", lambda e: clear_btn.configure(fg_color="transparent", text_color="red"))
         mask_frame.grid_columnconfigure(1, weight=1)
         mask_frame.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
         mask_crc.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
