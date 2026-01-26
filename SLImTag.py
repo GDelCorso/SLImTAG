@@ -319,7 +319,7 @@ class SegmentationApp(ctk.CTk):
         self.update_button_colors()
         
         
-    def require_image(self):
+    def image_is_loaded(self):
         '''
         Warning message if no image has been load.
         '''
@@ -359,7 +359,7 @@ class SegmentationApp(ctk.CTk):
         user sees the previous mask.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         if self.undo_stack:
@@ -374,7 +374,7 @@ class SegmentationApp(ctk.CTk):
         unique ID and a color, and updates the UI accordingly.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         self.deactivate_tools()
@@ -448,7 +448,7 @@ class SegmentationApp(ctk.CTk):
         the display and color preview.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         self.deactivate_tools()
@@ -485,7 +485,7 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the brush tool.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         if self.brush_btn.cget('state') != "disabled":
@@ -502,7 +502,7 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the connected component tool.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         if self.cc_btn.cget('state') != "disabled":
@@ -519,7 +519,7 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the magic wand tool.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         if self.magic_btn.cget('state') != "disabled":
@@ -535,7 +535,7 @@ class SegmentationApp(ctk.CTk):
         Activates or deactivates the smoothing tool.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         if self.smoothing_btn.cget('state') != "disabled":
@@ -595,7 +595,7 @@ class SegmentationApp(ctk.CTk):
         - Indexed PNG (mode "P"): direct recovery of mask indices.
         - RGB PNG: legacy color-based reconstruction.
         """
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
     
         self.deactivate_tools()
@@ -685,7 +685,7 @@ class SegmentationApp(ctk.CTk):
         see the identified masks.
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         if self.mask_orig is None:
             return
@@ -831,7 +831,7 @@ class SegmentationApp(ctk.CTk):
         '''
         Use arrows to move across the image.
         '''
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         self.offset_x += dx
         self.offset_y += dy
@@ -880,7 +880,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         self.zoom *= 1.1
@@ -892,7 +892,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         
         self.zoom *= 0.9
@@ -903,7 +903,7 @@ class SegmentationApp(ctk.CTk):
         '''
         Reset zoom (CTRL-=).
         '''
-        if not self.require_image():
+        if not self.image_is_loaded():
             return
         self.zoom = 1.0
         self.offset_x = 0
