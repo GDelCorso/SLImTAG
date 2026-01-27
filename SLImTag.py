@@ -187,7 +187,7 @@ class SegmentationApp(ctk.CTk):
 
         self.status_icon = ctk.CTkLabel(self.statusbar, text=STATUS_SYMBOL, text_color=STATUS_COLOR["idle"], width=14)
         self.status_icon.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(0, 2))
-        self.status_label = ctk.CTkLabel(self.statusbar, text="")
+        self.status_label = ctk.CTkLabel(self.statusbar, text="Initializing...")
         self.status_label.grid(row=0, column=1, sticky="w", padx=(4, 0))
         
         self.grid_rowconfigure(0, weight=1)
@@ -636,8 +636,8 @@ class SegmentationApp(ctk.CTk):
         # RESET HISTORY
         self.undo_stack.clear()
             
-        self.set_status("ready", "Ready")
         self.update_display()
+        self.set_status("ready", "Ready")
 
     def load_mask(self):
         """
@@ -652,6 +652,8 @@ class SegmentationApp(ctk.CTk):
         p = filedialog.askopenfilename(filetypes=[("IndexedPNG or PNG", "*.png")])
         if not p:
             return
+        
+        self.set_status("loading", "Loading mask...")
     
         self.push_undo()
         ext = os.path.splitext(p)[1].lower()
@@ -725,8 +727,10 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig = np.array(Image.fromarray(self.mask_orig).resize(
                 (self.image_orig.size[0], self.image_orig.size[1]), Image.NEAREST
             ))
-    
+
         self.update_display()
+        self.set_status("ready", "Ready")
+
 
     
     def save_mask(self, alpha=0.6):
@@ -743,6 +747,8 @@ class SegmentationApp(ctk.CTk):
         p = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG indexed", "*.png")])
         if not p:
             return
+        
+        self.set_status("loading", "Saving mask...")
     
         # SCALE
         mask_to_save = Image.fromarray(self.mask_orig, mode="P")
@@ -755,6 +761,8 @@ class SegmentationApp(ctk.CTk):
     
         mask_to_save.putpalette(palette)
         mask_to_save.save(p)
+        
+        self.set_status("ready", "Ready")
 
 
 
@@ -933,20 +941,26 @@ class SegmentationApp(ctk.CTk):
         if not self.image_is_loaded():
             return
         
+        # change status while zoom function is inefficient, so that user is aware
+        self.set_status("loading", "Zooming in...")
         self.zoom *= 1.1
         self.update_display()
+        self.set_status("ready", "Ready")
 
 
     def zoom_out(self, e=None):
         '''
-        Adjust zoom level (zoom in).
+        Adjust zoom level (zoom out).
         '''
         # Check if an image is loaded
         if not self.image_is_loaded():
             return
         
+        # change status while zoom function is inefficient, so that user is aware
+        self.set_status("loading", "Zooming out...")
         self.zoom *= 0.9
         self.update_display()
+        self.set_status("ready", "Ready")
         
         
     def reset_zoom(self, e=None):
@@ -1022,6 +1036,7 @@ class SegmentationApp(ctk.CTk):
         state for undo and updating the display.
         '''
         if self.image_orig is None or self.active_mask_id is None: return
+        self.set_status("loading", "SAM computing...")
         self.push_undo()
         x = int((e.x-self.offset_x)/self.display_scale)
         y = int((e.y-self.offset_y)/self.display_scale)
@@ -1036,6 +1051,7 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig[masks[0] & (self.mask_orig==self.active_mask_id)]=0
             
         self.update_display()
+        self.set_status("ready", "Ready")
 
     # CONNECTED COMPONENT -----------------------------------------------------
     def get_connected_component(self, mask, start_y, start_x, target_id):
