@@ -130,7 +130,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 ## TO-DO LIST and BUGFIX:
 
 ### Major
-- [ ] Rewrite GUI
+- [x] Rewrite GUI (but improvements are welcome!)
 - [ ] Redefine zoom function (by avoiding update loop on subselection)
 - [ ] Ctrl+magic wand: multiple conditional points (left: positive, right: negative), activate SAM at release Ctrl, and mask preview
 
@@ -150,6 +150,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] "Unsaved changes" status does not look at the undo history ― if you open a mask, do something, then undo, the mask will still be considered "modified"
 - [ ] Allow "Clean Mask" undo
 - [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
+- [ ] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
 
 ### Potential additional features
 - [ ] Different brush shapes (square)
