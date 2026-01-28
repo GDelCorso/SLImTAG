@@ -1,4 +1,4 @@
-# SLImTAG – `S`imple `L`ight-weight `Im`age `TAG`ging tool
+# SLImTAG – Simple Light-weight Image TAGging tool
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
