@@ -147,6 +147,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [x] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 - [x] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
+- [ ] "Unsaved changes" status does not look at the undo history ― if you open a mask, do something, then undo, the mask will still be considered "modified"
 - [ ] Allow "Clean Mask" undo
 - [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 
