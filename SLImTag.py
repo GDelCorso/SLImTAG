@@ -43,7 +43,7 @@ warnings.filterwarnings(
 MAX_DISPLAY = 800   # Maximum display size for resizing images
 UNDO_DEPTH = 10     # Maximum number of undo steps
 
-MAX_RES = 1024    # Hardcoded, maximum working resolution, if None, deactivated
+MAX_RES = None    # Hardcoded, maximum working resolution, if None, deactivated
 REFRESH_RATE_BRUSH = 0.05    # Refresh rate for the brush
 
 # predefined high contrast colors for masks
