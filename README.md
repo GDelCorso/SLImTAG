@@ -147,7 +147,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [x] When a mask is removed, a new mask additions should be placed on the first empty value of the list
-- [ ] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
+- [x] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 - [ ] Allow "Clean Mask" undo
 - [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 
@@ -157,6 +157,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] Define plugins for different features to mantain the system lightweight and make it adaptable to user experience
 - [ ] Add button "invert mask"
 - [ ] Add "save png with mask as alpha channel"
+- [ ] Add "paint bucket" that changes color of (connected component of) mask with active mask
 
 ### Extension to bio-medical fields
 - [ ] Import MedSAM and modify the MagicWand wrapper
