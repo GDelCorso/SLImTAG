@@ -1112,7 +1112,8 @@ class SegmentationApp(ctk.CTk):
         '''
         if self.mask_orig is None or self.active_mask_id is None:
             return
-    
+        
+        self.set_status("loading", "Applying smoothing...")
         # Identify the connected component
         comp = self.get_connected_component(self.mask_orig, y, x, self.active_mask_id)
         if not comp.any():
@@ -1135,6 +1136,7 @@ class SegmentationApp(ctk.CTk):
         else:
             self.mask_orig[comp_smooth] = self.active_mask_id
         self.update_display()
+        self.set_status("ready", "Ready")
 
 #%% Main cycle
 if __name__ == "__main__":
