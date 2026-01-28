@@ -1,4 +1,4 @@
-# SLImTAG – *S*imple *L*ight-weight *Im*age *Tag*ging tool
+# SLImTAG – <u>S</u>imple <u>L</u>ight-weight <u>Im</u>age <u>TAG</u>ging tool
 
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
