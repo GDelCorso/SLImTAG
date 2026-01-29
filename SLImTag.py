@@ -158,7 +158,7 @@ class SegmentationApp(ctk.CTk):
         self.menu_bar.add_cascade(label="View", menu=view_menu)
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
-        image_menu.add_command(label="Import image", command=self.load_image)
+        image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
         self.menu_bar.add_cascade(label="Image", menu=image_menu)
         # Menu Mask (top menu)
         mask_menu = tk.Menu(self.menu_bar, tearoff=0)
