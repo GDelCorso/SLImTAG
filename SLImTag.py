@@ -20,11 +20,11 @@ from PIL import Image, ImageDraw, ImageTk
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
-from tkinter import filedialog, simpledialog, messagebox
+from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog
+from slimtag_utils import MultiButtonDialog, EntryDialog
 
 # Torch and SAM (Segment anything model)
 import torch
@@ -465,7 +465,9 @@ class SegmentationApp(ctk.CTk):
             return
         
         # Ask user for mask name
-        name = simpledialog.askstring("New Mask", "Enter name for the new mask:")
+        #name = simpledialog.askstring("New Mask", "Enter name for the new mask:")
+        name_dialog = EntryDialog(self, message="New mask name:")
+        name = name_dialog.value
         if not name:  # User cancelled or empty
             return
         
