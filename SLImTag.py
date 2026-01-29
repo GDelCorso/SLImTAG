@@ -411,10 +411,10 @@ class SegmentationApp(ctk.CTk):
         Quit program.
         """
         if self.modified:
-            confirmation = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
-                                             buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
-                                             )
-            answer = confirmation.return_value
+            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                        buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
+                                       )
+            answer = confirm.return_value
             if answer == "save":
                 self.save_mask()
                 self.quit()
@@ -645,6 +645,19 @@ class SegmentationApp(ctk.CTk):
         '''
         Load a .png or .jpg image and define and empty mask on it.
         '''
+
+        if self.modified:
+            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                        buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
+                                       )
+            answer = confirm.return_value
+            if answer == "save":
+                self.save_mask()
+                self.set_modified(False)
+            elif answer == "discard":
+                self.set_modified(False)
+            else:
+                return
 
         self.deactivate_tools()
         p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
