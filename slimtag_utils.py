@@ -15,8 +15,6 @@ class MultiButtonDialog(ctk.CTkToplevel):
         n_buttons = len(buttons)
         n_btn_rows = ((n_buttons - 1) // 3) + 1 # number of button rows
 
-        print(n_btn_rows)
-
         # Message
         ctk.CTkLabel(self, text=message, wraplength=self.maxsize, justify="left").grid(row=0, column=0, sticky="nsew", padx=20, pady=(20, 10))
 

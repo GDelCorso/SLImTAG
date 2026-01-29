@@ -353,13 +353,22 @@ class SegmentationApp(ctk.CTk):
         
     def image_is_loaded(self):
         '''
-        Warning message if no image has been load.
+        Warning message if no image has been loaded.
+        In that case, user can load image from warning dialog
         '''
+        # if self.image_orig is None:
+        #     messagebox.showwarning("Warning", "Load image before")
+        #     return False
+        # return True
         if self.image_orig is None:
-            messagebox.showwarning("Warning", "Load image before")
-            return False
+            warn = MultiButtonDialog(self, message="WARNING: No image loaded",
+                                     buttons=[("Import image...", "import"), ("Cancel", None)])
+            action = warn.return_value
+            if action == "import":
+                self.load_image()
+            else:
+                return False
         return True
-
 
     def set_controls_state(self, enabled: bool):
         '''
@@ -401,7 +410,7 @@ class SegmentationApp(ctk.CTk):
             confirmation = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
                                              buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
                                              )
-            answer = confirmation.result
+            answer = confirmation.return_value
             if answer == "save":
                 self.save_mask()
                 self.quit()
