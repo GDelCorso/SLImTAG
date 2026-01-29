@@ -26,6 +26,7 @@ Please note that the version numbers listed here refer to the environment in whi
 
 - Python 3.12
 - PyTorch (for SAM): torch == 2.5.1 (CUDA 12.1 recommended if available) and torchvision == 0.20.1
+- segment-anything == 1.0 (actual SAM library)
 - numpy == 2.3.1 (mask manipulation)
 - scipy == 1.17.0 (erosion/dilation tool)
 - pillow == 12.0.0 (images management)
