@@ -88,11 +88,11 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 
 ![Interface](images/gui.png)
 
-The first step is to load an image (in PNG or JPG) using `Image > Import Image` from the menu.
+The first step is to load an image (in PNG or JPG) using `Image > Import Image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut.
 
 ### Mask Actions
 
-Use the `Add new mask` button to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear i a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9.
+Use the `Add new mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear i a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9.
 
 Click on the small `×` button next to a mask to remove ALL the regions marked with it, and also remove the mask from the list. The active mask can be also removed via the menu `Mask > Clear active mask`. ALL masks can be removed via `Mask > Clear all masks`. **Any "clear mask" action cannot be undone.**
 

@@ -197,7 +197,7 @@ class SegmentationApp(ctk.CTk):
 
         # Mask controls
         # Add mask button
-        ctk.CTkButton(self.masks_panel, text="Add new mask", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
+        ctk.CTkButton(self.masks_panel, text="Add new mask [N]", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
         
         # ScrollFrame for mask list
         self.mask_list_frame = ctk.CTkScrollableFrame(self.masks_panel)
@@ -296,8 +296,12 @@ class SegmentationApp(ctk.CTk):
         self.bind("<S>", lambda e: self.toggle_smoothing())
         #self.bind("<z>", lambda e: self.undo()) # I actually prefer Ctrl-Z, but
         #self.bind("<Z>", lambda e: self.undo()) # we can discuss about this. -Oscar
+        self.bind("<n>", lambda e: self.add_mask())
+        self.bind("<N>", lambda e: self.add_mask())
         self.bind("<Control-z>", lambda e: self.undo())
         self.bind("<Control-Z>", lambda e: self.undo())
+        self.bind("<Control-I>", lambda e: self.load_image())
+        self.bind("<Control-i>", lambda e: self.load_image())
         self.bind("<Control-S>", lambda e: self.save_mask())
         self.bind("<Control-s>", lambda e: self.save_mask())
         self.bind("<Control-q>", lambda e: self.quit_program())
