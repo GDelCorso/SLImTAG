@@ -152,6 +152,7 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] Allow "Clean Mask" undo
 - [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 - [ ] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
+- [ ] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
 - [ ] Smoothing on image border/contours of another mask, should not reduce dimension
 
 ### Potential additional features
