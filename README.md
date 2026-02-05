@@ -126,14 +126,18 @@ Zoom is regulated via the `View` menu or by scrolling with the mouse wheel. Also
 
 When **no** tool is selected, left click-and-drag to pan the image.
 
+### Multipoint SAM
+
+While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to enter "multipoint mode". In this mode, a single left click adds a "positive" point (i.e., belonging to the mask) for SAM segmentation, and a single right click adds a "negative" point (i.e., belonging to the background). The mask is then computed and added when <kbd>Ctrl</kbd> is released.
+
 ---
 
 ## TO-DO LIST and BUGFIX:
 
 ### Major
 - [x] Rewrite GUI (but improvements are welcome!)
-- [ ] Redefine zoom function (by avoiding update loop on subselection)
-- [ ] Ctrl+magic wand: multiple conditional points (left: positive, right: negative), activate SAM at release Ctrl, and mask preview
+- [x] Redefine zoom function (by avoiding update loop on subselection)
+- [x] Ctrl+magic wand: multiple conditional points (left: positive, right: negative), activate SAM at release Ctrl, and mask preview
 
 ### Minor
 - [ ] Zoom on mouse location instead of top left corner
@@ -154,6 +158,8 @@ When **no** tool is selected, left click-and-drag to pan the image.
 - [ ] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
 - [ ] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
 - [ ] Smoothing on image border/contours of another mask, should not reduce dimension
+- [ ] Bind Tab/Shift-Tab to cycle between masks
+- [ ] Define a function "compute_zoom_limits(self)" that computes min and max zoom -- see commented pseudocode
 
 ### Potential additional features
 - [ ] Different brush shapes (square)

@@ -1,7 +1,7 @@
 '''
 SLImTAG gui. Version 1.0
 
-01/20/2026
+20 Jan 2026
 
 Giulio Del Corso & Oscar Papini
 '''
@@ -46,17 +46,22 @@ warnings.filterwarnings(
 MAX_DISPLAY = 800   # Maximum display size for resizing images
 UNDO_DEPTH = 10     # Maximum number of undo steps
 
-MAX_RES = None    # Hardcoded, maximum working resolution, if None, deactivated
+MAX_ZOOM_PIXEL = 32 # minimum number of pixels of orig image visible at max zoom level
+MIN_ZOOM_PIXEL = 8192 # maximum number of pixels of orig image visible at max zoom level
+# TODO upgrade min zoom management
+#MIN_ZOOM_CANVAS = 0.9 # for images NOT smaller than (MIN_ZOOM_CANVAS)*(canvas dimension), this is the maximum value that the ratio (canvas dimension)/(image dimension) can achieve
+#MIN_ZOOM_FACTOR = 0.05 # minimum zoom value IN ANY CASE
+
 REFRESH_RATE_BRUSH = 0.05    # Refresh rate for the brush
 
 # predefined high contrast colors for masks
 MAX_MASKS = 20 
 HIGH_CONTRAST_COLORS = [
-    (255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),
-    (0,255,255),(255,128,0),(128,0,255),(0,255,128),
-    (128,255,0),(255,0,128),(0,128,255),(128,128,0),
-    (128,0,0),(0,128,0),(0,0,128),(200,200,200),
-    (255,200,200),(200,255,200),(200,200,255)
+    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
+    (0, 255, 255), (255, 128, 0), (128, 0, 255), (0, 255, 128),
+    (128, 255, 0), (255, 0, 128), (0, 128, 255), (128, 128, 0),
+    (128, 0, 0), (0, 128, 0), (0, 0, 128), (200, 200, 200),
+    (255, 200, 200), (200, 255, 200), (200, 200, 255)
 ]
 
 # colors for different tool states
@@ -68,10 +73,10 @@ SMOOTH_ON_COLOR = "#2196F3"  # blue
 
 STATUS_SYMBOL = "●"
 STATUS_COLOR = {
-    "ready":  ("#2ecc71", "#2ecc71"),  # green
-    "loading":("#f1c40f", "#f1c40f"),  # yellow
-    "error":  ("#e74c3c", "#e74c3c"),  # red
-    "idle":   ("#95a5a6", "#95a5a6"),  # gray
+    "ready":  ("#2ECC71", "#2ECC71"),  # green
+    "loading":("#F1C40F", "#F1C40F"),  # yellow
+    "error":  ("#E74C3C", "#E74C3C"),  # red
+    "idle":   ("#95A5A6", "#95A5A6"),  # gray
     }
 
 
@@ -92,6 +97,7 @@ else:
 
 #%% CTK parameters
 ctk.set_appearance_mode("System")   # System theme
+#ctk.set_appearance_mode("dark") # force dark mode for testing
 ctk.set_default_color_theme("blue") # CTK color theme
 
 #%% Main class
@@ -102,40 +108,68 @@ class SegmentationApp(ctk.CTk):
         self.geometry("1300x900")
 
         # STATE ---------------------------------------------------------------
+        # Full image and mask
         self.image_orig = None
         self.mask_orig = None
+        # Displayed image and mask
+        self.image_disp = None
         self.mask_disp = None
         
-        self.modified = False # check if mask is modified and not saved
+        # aux display variables
+        self.mask_pil = None
+        self.tk_ov = None
+        
+        # to keep track of resizing window
+        self.resizing_event = None
+        
+        # boolean switch to check if mask is modified and not saved
+        self.modified = False
         
         # Define the zoom status
         self.zoom = 1.0
-        self.offset_x = 0
-        self.offset_y = 0
         self._pan_start = None
-
+        self.zoom_max = 1.0
+        self.zoom_min = 1.0
+        
+        self.zoom_label_var = tk.StringVar(self, value="Zoom: 100%")
+        
         # Original values for rescale
         self.orig_h = None
         self.orig_w = None
 
+        # Masks stuff
         self.mask_labels = {}
         self.mask_colors = {}
         self.mask_widgets = {}
-        self.mask_widget_bg = None # store og background
         self.active_mask_id = None
         
+        # switch for locking mask
         self.only_on_empty = tk.BooleanVar(self, value=False)
- 
+
+        # tools status
         self.brush_active = False
         self.magic_mode = False
         self.cc_mode = False 
         self.smoothing_active = False
         
+        # brush control
         self.last_brush_pos = None
-
         self.brush_size = 30
+        
+        # undo list
         self.undo_stack = []
         
+        # Position top left of the view (in pixels of the original image)
+        # please note that these are NOT bounded to image size
+        self.view_x = None
+        self.view_y = None
+        # Corresponding view size (width, height; pixels of the original image)
+        self.view_w = None
+        self.view_h = None
+
+        # SAM management
+        self.sam_points = []
+        self.sam_pt_labels = []
 
         # UI ------------------------------------------------------------------
         
@@ -183,7 +217,6 @@ class SegmentationApp(ctk.CTk):
         self.masks_panel.grid(row=0, column=2, sticky="nsew")
         
         # Statusbar
-        
         self.statusbar = ctk.CTkFrame(self, height=24, fg_color=("gray92", "gray14"))
         self.statusbar.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=0, pady=0)
 
@@ -192,9 +225,14 @@ class SegmentationApp(ctk.CTk):
         self.status_label = ctk.CTkLabel(self.statusbar, text="Initializing...")
         self.status_label.grid(row=0, column=1, sticky="w", padx=(4, 0))
         
+        self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
+        self.zoom_label.grid(row=0, column=3, sticky="e", padx=10)
+        
+        self.statusbar.grid_columnconfigure(2, weight=1)
+        
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
-
+        
         # Mask controls
         # Add mask button
         ctk.CTkButton(self.masks_panel, text="Add new mask [N]", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
@@ -255,7 +293,6 @@ class SegmentationApp(ctk.CTk):
         sam = sam_model_registry[MODEL_TYPE](checkpoint=MODEL_WEIGHTS_PATH)
         sam.to(device).eval()
         self.sam = SamPredictor(sam)
-        
 
         # BINDINGS ------------------------------------------------------------
         self.canvas.bind("<MouseWheel>", self.zoom_evt)
@@ -284,6 +321,12 @@ class SegmentationApp(ctk.CTk):
         # Bind "close window" to quit_program
         self.protocol("WM_DELETE_WINDOW", self.quit_program)
         
+        # Bind "resizing window"
+        self.bind("<Configure>", self.on_resize)
+        
+        # Fire SAM at Ctrl release
+        self.bind("<KeyRelease-Control_L>", lambda e: self.sam_apply_release())
+        self.bind("<KeyRelease-Control_R>", lambda e: self.sam_apply_release())
         
         # SHORTCUT KEYS -------------------------------------------------------
         self.bind("<b>", lambda e: self.toggle_brush())
@@ -312,28 +355,53 @@ class SegmentationApp(ctk.CTk):
 
 
     #%% AUX METHODS  ----------------------------------------------------------
-    def update_display(self):
+    def update_display(self, update_all="Global"):
         '''
         Aux method to update display whenever a change occurs.
-        '''
-        if self.image_orig is None: return
-        w,h = self.image_orig.size
-        scale = min(MAX_DISPLAY/w, MAX_DISPLAY/h) * self.zoom
-        self.display_scale = scale
-        disp = self.image_orig.resize((int(w*scale),int(h*scale)))
-        self.mask_disp = np.array(Image.fromarray(self.mask_orig).resize(disp.size, Image.NEAREST))
-
-        self.tk_img = ImageTk.PhotoImage(disp)
-        self.canvas.delete("all")
-        self.canvas.create_image(self.offset_x,self.offset_y,anchor="nw", image=self.tk_img)
-
-        # overlay
-        overlay = np.zeros((*self.mask_disp.shape, 4), np.uint8)
-        for mid,c in self.mask_colors.items():
-            overlay[self.mask_disp==mid] = [*c, 150]
-        self.tk_ov = ImageTk.PhotoImage(Image.fromarray(overlay))
-        self.canvas.create_image(self.offset_x,self.offset_y,anchor="nw", image=self.tk_ov)
         
+        Valid argument for update_all:
+            - "Global" updates both the background image and the mask overlay
+            - "Mask" updates only the mask overlay
+        '''
+        if self.image_orig is None:
+            return
+        
+        self.zoom_label_var.set(f"Zoom: {round(100*self.zoom)}%")
+
+        if update_all == "Global":
+            # remove old info
+            self.canvas.delete("background_image","mask")
+            # create new image view and paste it on canvas
+            self.image_disp = self.image_orig.crop([self.view_x, self.view_y, self.view_x+self.view_w, self.view_y+self.view_h]) \
+                                             .resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+            self.tk_img = ImageTk.PhotoImage(self.image_disp)
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img, tag="background_image")
+        elif update_all == "Mask":
+            # delete only the mask to speed up computations
+            self.canvas.delete("mask")
+        
+        # compute new mask view margins
+        top = max(0, self.view_y)
+        bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
+        left = max(0,self.view_x)
+        right = min(max(self.view_x+self.view_w,0), self.orig_w)
+        
+        # create new mask view and populate
+        cut_mask_orig = np.zeros((self.view_h, self.view_w), dtype=self.mask_orig.dtype)
+        cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top: bottom, left:right]
+        
+        # create overlay object and convert it to be pasted on canvas
+        overlay = np.zeros((self.view_h, self.view_w, 4), np.uint8)
+        for mid ,c in self.mask_colors.items():
+            overlay[cut_mask_orig==mid] = [*c, 150]
+        self.mask_pil = Image.fromarray(overlay)
+        resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+        self.tk_ov = ImageTk.PhotoImage(resized)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+        
+        # raise back SAM multipoints if any
+        self.canvas.tag_raise("sam_pt")
+
     def update_button_colors(self):
         '''
         Update button colors based on active tool.
@@ -360,10 +428,6 @@ class SegmentationApp(ctk.CTk):
         Warning message if no image has been loaded.
         In that case, user can load image from warning dialog
         '''
-        # if self.image_orig is None:
-        #     messagebox.showwarning("Warning", "Load image before")
-        #     return False
-        # return True
         if self.image_orig is None:
             warn = MultiButtonDialog(self, message="WARNING: No image loaded",
                                      buttons=[("Import image...", "import"), ("Cancel", None)])
@@ -405,6 +469,32 @@ class SegmentationApp(ctk.CTk):
             else: # state == False
                 self.modified = False
                 self.title(title[1:]) # remove '*'
+
+    # TODO
+    # def compute_zoom_limits(self):
+    #     """
+    #     Compute new zoom limits when an image is loaded or when the canvas is resized,
+    #     depending on the image size and the (current/updated) canvas size
+    #     """
+    #     if an image is not loaded: return
+    #     compute limits and set self.zoom_min and self.zoom_max
+    #     call this function from load_image and aso bind it to the function called at window resize
+
+    def on_resize(self, e):
+        """
+        Redraw canvas after window resize
+        """
+        if e.widget is self: # prevent firing during other events
+            # while resizing, cancel the scheduled update_display event
+            if self.resizing_event is not None:
+                self.after_cancel(self.resizing_event)
+            # if still resizing, schedule a new event
+            self.resizing_event = self.after(300, self.update_display_after_resize)
+    
+    def update_display_after_resize(self):
+        self.view_h = int(self.canvas.winfo_height()/self.zoom)
+        self.view_w = int(self.canvas.winfo_width()/self.zoom)
+        self.update_display(update_all="Global")
 
     def quit_program(self):
         """
@@ -451,7 +541,7 @@ class SegmentationApp(ctk.CTk):
         
         if self.undo_stack:
             self.mask_orig = self.undo_stack.pop()
-            self.update_display()
+            self.update_display(update_all="Mask")
 
 
     # MASK MANAGEMENT ---------------------------------------------------------
@@ -469,36 +559,33 @@ class SegmentationApp(ctk.CTk):
             return
         
         # Ask user for mask name
-        #name = simpledialog.askstring("New Mask", "Enter name for the new mask:")
         name_dialog = EntryDialog(self, message="New mask name:")
         name = name_dialog.value
         if not name:  # User cancelled or empty
             return
         
-        #mid = max(self.mask_labels.keys(), default=0) + 1
         mid = min([i+1 for i in range(MAX_MASKS) if i+1 not in self.mask_labels.keys()])
         self.mask_labels[mid] = name
         self.mask_colors[mid] = HIGH_CONTRAST_COLORS[mid-1]
-        # self.active_mask_id = mid
         
         self.mask_widgets[mid] = self.create_mask_widget(mid)
         self.mask_widgets[mid].pack(fill="x", expand=True)
-        self.change_mask(target_id=mid)
+        self.change_mask(target_id=mid) # this also sets self.active_mask_id
 
         self.set_controls_state(True) # activate buttons if there is at least one mask
     
     def create_mask_widget(self, mid):
         circle_size = 21
         mask_frame = ctk.CTkFrame(self.mask_list_frame)
-        if not self.mask_widget_bg: # store original color
-            self.mask_widget_bg = mask_frame.cget("fg_color")
+        mask_frame._default_fg_color = mask_frame.cget("fg_color")
         color_circle = Image.new("RGBA", (circle_size+1, circle_size+1), (0, 0, 0, 0))
         color_circle_draw = ImageDraw.Draw(color_circle)
         color_circle_draw.ellipse((0, 0, circle_size, circle_size), fill=self.mask_colors[mid])
         mask_crc = ctk.CTkLabel(mask_frame, text="", image=ctk.CTkImage(color_circle, size=(circle_size+1, circle_size+1)))
         mask_crc.grid(row=0, column=0, padx=(10,5), pady=10)
-        mask_lbl = ctk.CTkLabel(mask_frame, text=f"{mid}: {self.mask_labels[mid]}", anchor="w")
-        mask_lbl.grid(row=0, column=1, sticky="ew", padx=5, pady=10)
+        mask_frame.lbl = ctk.CTkLabel(mask_frame, text=f"{mid}: {self.mask_labels[mid]}", anchor="w")
+        mask_frame.lbl.grid(row=0, column=1, sticky="ew", padx=5, pady=10)
+        mask_frame._default_text_color = mask_frame.lbl.cget("text_color")
         clear_btn = ctk.CTkButton(mask_frame, text="×",
                                   font=ctk.CTkFont(size=18, weight="bold"),
                                   width=12, height=12,
@@ -511,7 +598,7 @@ class SegmentationApp(ctk.CTk):
         mask_frame.grid_columnconfigure(1, weight=1)
         mask_frame.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
         mask_crc.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
-        mask_lbl.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
+        mask_frame.lbl.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
         if 1 <= mid <= 9:
             self.bind(f"<Key-{mid}>", lambda e, tid=mid: self.change_mask(e, tid))
         return mask_frame
@@ -523,10 +610,12 @@ class SegmentationApp(ctk.CTk):
         '''
         # Retrieves the mask ID corresponding to the current selection
         if self.active_mask_id:
-            self.mask_widgets[self.active_mask_id].configure(fg_color=self.mask_widget_bg)
+            self.mask_widgets[self.active_mask_id].configure(fg_color=self.mask_widgets[self.active_mask_id]._default_fg_color)
+            self.mask_widgets[self.active_mask_id].lbl.configure(text_color=self.mask_widgets[self.active_mask_id]._default_text_color)
         self.active_mask_id = target_id
         # Change appearance of mask row in mask list
         self.mask_widgets[target_id].configure(fg_color="white")
+        self.mask_widgets[target_id].lbl.configure(text_color="black")
         # Updates the UI buttons’ colors
         self.update_button_colors()
         self.set_controls_state(True)
@@ -559,7 +648,7 @@ class SegmentationApp(ctk.CTk):
         
         if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
             self.set_controls_state(False)
-        self.update_display()
+        self.update_display(update_all="Mask")
     
     def clear_active_mask(self):
         if self.active_mask_id is None: return
@@ -667,34 +756,38 @@ class SegmentationApp(ctk.CTk):
         self.set_status("loading", "Loading image...")
         img = Image.open(p).convert("RGB")
         self.orig_w, self.orig_h = img.size
-        
-        # SCALING if MAX_RES is set
-        if MAX_RES is not None:
-            max_axis = max(self.orig_w, self.orig_h)
-            scale = MAX_RES / max_axis
-            if scale < 1.0:  # only scale down
-                new_w = int(self.orig_w * scale)
-                new_h = int(self.orig_h * scale)
-                img = img.resize((new_w, new_h), Image.LANCZOS)
-            else:
-                new_w, new_h = self.orig_w, self.orig_h
-        else:
-            new_w, new_h = self.orig_w, self.orig_h
-        
         self.image_orig = img
-        self.mask_orig = np.zeros((new_h, new_w), np.uint8)
+        self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
         self.sam.set_image(np.array(self.image_orig))
         
-        # RESET MASKS
+        # reset masks
         self.clear_all_masks()
-        # self.mask_labels.clear()
-        # self.mask_colors.clear()
-        # self.active_mask_id = None
+        
+        # TODO refine zoom_min
+        
+        # reset zoom
+        self.zoom = 1.0
+        # Define a max and min zoom
+        self.zoom_max = max(self.canvas.winfo_width() / MAX_ZOOM_PIXEL, self.canvas.winfo_height() / MAX_ZOOM_PIXEL)
+        self.zoom_min = min(self.canvas.winfo_width() / MIN_ZOOM_PIXEL, self.canvas.winfo_height() / MIN_ZOOM_PIXEL)
+        #self.zoom_max = max(self.orig_w // MAX_ZOOM_PIXEL, self.orig_h // MAX_ZOOM_PIXEL, 1)
+        #self.zoom_min = min(max(min(self.canvas.winfo_width()/self.orig_w, self.canvas.winfo_height()/self.orig_h)*0.9, MIN_ZOOM_FACTOR), 0.9)
+        # min(...)*0.9 to be able to potentially see all image on the current canvas
+        # MIN_ZOOM_FACTOR hard-coded if the canvas is small or the image is too big
+        # min(..., 0.9) to prevent rescaling of very small images w.r.t. canvas
 
         # RESET HISTORY
         self.undo_stack.clear()
+        
+        # Define the view parameters (equal to the canvas size):
+        self.update_idletasks()
+        self.view_x = 0
+        self.view_y = 0
+        self.view_w = self.canvas.winfo_width()#min(self.canvas.winfo_width(), self.orig_w)
+        self.view_h = self.canvas.winfo_height()#min(self.canvas.winfo_height(), self.orig_h)
             
         self.update_display()
+        
         self.set_status("ready", "Ready")
 
     def load_mask(self):
@@ -705,14 +798,14 @@ class SegmentationApp(ctk.CTk):
         """
         if not self.image_is_loaded():
             return
-    
+        
         self.deactivate_tools()
         p = filedialog.askopenfilename(filetypes=[("IndexedPNG or PNG", "*.png")])
         if not p:
             return
         
         self.set_status("loading", "Loading mask...")
-    
+        
         self.push_undo()
         ext = os.path.splitext(p)[1].lower()
         if ext != ".png":
@@ -720,13 +813,9 @@ class SegmentationApp(ctk.CTk):
         
         # RESET ALL MASKS
         self.clear_all_masks()
-        # self.mask_labels.clear()
-        # self.mask_colors.clear()
-        # self.active_mask_id = None
-    
-    
+        
         img = Image.open(p)
-    
+        
         # CASE 1: Indexed PNG
         if img.mode == "P":
             arr = np.array(img, dtype=np.uint8)
@@ -734,30 +823,30 @@ class SegmentationApp(ctk.CTk):
             labels = np.unique(arr)
             labels = labels[labels != 0][:MAX_MASKS]
             palette = img.getpalette()
-    
+            
             for l in labels:
                 self.mask_labels[l] = f"mask_{l}"
                 idx = l * 3
                 self.mask_colors[l] = tuple(palette[idx:idx+3])
                 self.mask_widgets[l] = self.create_mask_widget(l)
                 self.mask_widgets[l].pack(fill="x", expand=True)
-    
+            
             if len(labels) > 0:
                 self.change_mask(target_id=labels[0])
-    
+        
         # CASE 2: Generic RGB PNG
         else:
             img = img.convert("RGB")
             arr = np.array(img)
             h, w, _ = arr.shape
-    
+            
             arr_flat = arr.reshape(-1, 3)
             arr_flat_nonblack = arr_flat[~np.all(arr_flat == 0, axis=1)]
-    
+            
             if len(arr_flat_nonblack) == 0:
                 self.mask_orig = np.zeros((h, w), np.uint8)
                 return
-    
+            
             unique_colors = []
             seen = set()
             for color in arr_flat_nonblack:
@@ -767,7 +856,7 @@ class SegmentationApp(ctk.CTk):
                     unique_colors.append(t)
                     if len(unique_colors) >= MAX_MASKS:
                         break
-    
+            
             mask = np.zeros((h, w), np.uint8)
             for i, color in enumerate(unique_colors, 1):
                 mask[np.all(arr == color, axis=-1)] = i
@@ -775,22 +864,15 @@ class SegmentationApp(ctk.CTk):
                 self.mask_colors[i] = color
                 self.mask_widgets[i] = self.create_mask_widget(i)
                 self.mask_widgets[i].pack(fill="x", expand=True)
-    
+            
             self.mask_orig = mask
             if unique_colors:
                 self.change_mask(target_id=1)
-    
-        # SCale
-        if MAX_RES is not None:
-            self.mask_orig = np.array(Image.fromarray(self.mask_orig).resize(
-                (self.image_orig.size[0], self.image_orig.size[1]), Image.NEAREST
-            ))
 
         self.update_display()
         self.set_status("ready", "Ready")
 
 
-    
     def save_mask(self, alpha=0.6):
         '''
         Save mask as a proper indexed png file and an associated png image to 
@@ -833,33 +915,47 @@ class SegmentationApp(ctk.CTk):
         to modify behaviour.
         '''
         shift_pressed = (e.state & 0x0001) != 0
+        ctrl_pressed = (e.state & 0x0004) != 0
         self._prev_brush_pos = None
-    
-        if self.smoothing_active:
-            y = int((e.y - self.offset_y)/self.display_scale)
-            x = int((e.x - self.offset_x)/self.display_scale)
+        
+        
+        if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
+            self._pan_start = (e.x, e.y, self.view_x, self.view_y)
+            return
+        
+        # Check position
+        x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y_check = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        
+        
+        if (x_check < 0) or (x_check > self.orig_w) or (y_check < 0) or (y_check > self.orig_h):
+            check_inside_image = False
+        else:
+            check_inside_image = True
+        
+        
+        if self.smoothing_active and check_inside_image:
+            x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+            y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
             op = "erosion" if shift_pressed else "dilation"
             self.apply_smoothing(y, x, operation=op)
-            return "break"
+            return
     
-        if self.cc_mode:
+        if self.cc_mode and check_inside_image:
             self.connected_component_click(e, remove_only=not shift_pressed)
-            return "break"
-        if self.magic_mode:
-            self.sam_click(e, add=not shift_pressed)
-            return "break"
-        if self.brush_active:
-            self.brush_at(int((e.x - self.offset_x)/self.display_scale),
-                          int((e.y - self.offset_y)/self.display_scale),
-                          add=not shift_pressed)
-            self.push_undo()
-            self.update_display()
-            return "break"
-    
-        if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
-            self._pan_start = (e.x, e.y, self.offset_x, self.offset_y)
-            return "break"
+            return
         
+        if self.magic_mode and check_inside_image:
+            self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
+            return
+        
+        if self.brush_active and check_inside_image:
+            x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+            y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+            self.brush_at(x, y, add=not shift_pressed)
+            self.push_undo()
+            self.update_display(update_all="Mask")
+            return
         
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
@@ -867,28 +963,40 @@ class SegmentationApp(ctk.CTk):
         self._drag_counter = 0
         self.update_display()
 
-    
     def on_canvas_right(self, e):
         '''
         Handles right-clicks on the canvas, applying the active tool's removal 
         or erosion action without toggling tools.
         '''
-        if self.smoothing_active:
-            y = int((e.y - self.offset_y)/self.display_scale)
-            x = int((e.x - self.offset_x)/self.display_scale)
+        ctrl_pressed = (e.state & 0x0004) != 0
+        
+        # Check position
+        x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y_check = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        
+        
+        if (x_check < 0) or (x_check > self.orig_w) or (y_check < 0) or (y_check > self.orig_h):
+            check_inside_image = False
+        else:
+            check_inside_image = True
+            
+        if self.smoothing_active and check_inside_image:
+            x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+            y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
             self.apply_smoothing(y, x, operation="erosion")
-            return "break"
+            return
     
-        if self.cc_mode:
+        if self.cc_mode and check_inside_image:
             self.connected_component_click(e, remove_only=False)
-            return "break"
-        if self.magic_mode:
-            self.sam_click(e, add=False)
-            return "break"
-        if self.brush_active:
+            return
+        
+        if self.magic_mode and check_inside_image:
+            self.sam_add_point(e, add=False, multipoint=ctrl_pressed)
+            return
+        
+        if self.brush_active and check_inside_image:
             self.brush(e, add=False)
-            return "break"
-
+            return
 
     def on_canvas_drag(self, e):
         '''
@@ -897,39 +1005,31 @@ class SegmentationApp(ctk.CTk):
         No interpolation between points to avoid undesired smoothing.
         '''
         shift_pressed = (e.state & 0x0001) != 0
+        
+        # Move the canvas if not tools selected
         if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
+            
             if self._pan_start is not None:
                 x0, y0, ox0, oy0 = self._pan_start
-                self.offset_x = ox0 + (e.x - x0)
-                self.offset_y = oy0 + (e.y - y0)
+                self.view_x = ox0 -int((e.x - x0)*(self.view_w/self.canvas.winfo_width()))
+                self.view_y = oy0- int((e.y - y0)*(self.view_h/self.canvas.winfo_height()))
                 self.update_display()
             return
         
-        if not self.brush_active or self.cc_mode:
+        # Check if the brush is not active (only draggable tool)
+        if not self.brush_active:
             return
         
-        x1 = int((e.x - self.offset_x) / self.display_scale)
-        y1 = int((e.y - self.offset_y) / self.display_scale)
+        # Define the brush drag
+        x1 = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y1 = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
-            self.push_undo()
+            self.push_undo() # TODO: Check problem for undo
             self.brush_at(x1, y1, add=not shift_pressed)
-            self.update_display()
+            self.update_display(update_all="Mask")
             return
-        
-        x0, y0 = self._prev_brush_pos
-        dx = x1 - x0
-        dy = y1 - y0
-        dist = max(1, int(np.hypot(dx, dy)))
-        
-        r = max(1, self.brush_size // 2)
-        step = max(1, r // 5)
-        
-        for i in range(0, dist + 1, step):
-            xi = int(x0 + dx * i / dist)
-            yi = int(y0 + dy * i / dist)
-            self.brush_at(xi, yi, add=not shift_pressed)
         
         # Skip some updates when zooming
         now = time.monotonic()
@@ -938,51 +1038,33 @@ class SegmentationApp(ctk.CTk):
             self._last_brush_update = 0.0
         
         if now - self._last_brush_update >= REFRESH_RATE_BRUSH:
-            self.update_display()
+            x0, y0 = self._prev_brush_pos
+            dx = x1 - x0
+            dy = y1 - y0
+            dist = max(1, int(np.hypot(dx, dy))) # Distance between previous and current point (in pixel)
+            r = max(1, self.brush_size // 2)
+            steps = max(3, dist*3 // r) # draw this number of circles along (x0, y0) and (x1, y1)
+            for i in np.linspace(0, dist + 1, steps):
+                xi = int(x0 + dx * i / dist)
+                yi = int(y0 + dy * i / dist)
+                self.brush_at(xi, yi, add=not shift_pressed)
+
+            self.update_display(update_all="Mask") # update only mask
             self._last_brush_update = now
-        
-        self._prev_brush_pos = (x1, y1)
+            self._prev_brush_pos = (x1, y1)
     
+    #%% PAN & ZOOM-------------------------------------------------------------
     
     def pan_view(self, dx, dy):
         '''
-        Use arrows to move across the image.
+        Pan view when distance is fixed. Used e.g. to bind keyboard arrows
         '''
         if not self.image_is_loaded():
             return
-        self.offset_x += dx
-        self.offset_y += dy
+        self.view_x += dx
+        self.view_y += dy
         self.update_display()
-
-
-    def brush_at(self, x, y, add=True):
-        '''
-        Aux method to define brush position without updating display or undo.
-        '''
-        if self.mask_orig is None or self.active_mask_id is None:
-            return
-        
-        r = self.brush_size // 2
-        buffer = max(1, r // 2)
     
-        y0, y1 = max(0, y - r - buffer), min(self.mask_orig.shape[0], y + r + buffer)
-        x0, x1 = max(0, x - r - buffer), min(self.mask_orig.shape[1], x + r + buffer)
-    
-        yy, xx = np.ogrid[y0:y1, x0:x1]
-        circle = (yy - y)**2 + (xx - x)**2 <= r*r
-    
-        if add:
-            if self.only_on_empty.get():
-                mask_area = self.mask_orig[y0:y1, x0:x1]
-                mask_area[circle & (mask_area==0)] = self.active_mask_id
-            else:
-                self.mask_orig[y0:y1, x0:x1][circle] = self.active_mask_id
-        else:
-            erase_mask = circle & (self.mask_orig[y0:y1, x0:x1] == self.active_mask_id)
-            self.mask_orig[y0:y1, x0:x1][erase_mask] = 0
-        
-        self.set_modified(True)
-
     def zoom_evt(self, e):
         '''
         Adjusts the zoom level of the displayed image based on mouse wheel 
@@ -1003,7 +1085,17 @@ class SegmentationApp(ctk.CTk):
         
         # change status while zoom function is inefficient, so that user is aware
         self.set_status("loading", "Zooming in...")
-        self.zoom *= 1.1
+        
+        # apply zoom
+        if (self.zoom * 1.1) < self.zoom_max:
+            self.zoom *= 1.1
+        
+        # TODO update also self.view_x, self.view_y to focus the zoom
+        #self.view_h = int(min(self.canvas.winfo_height(), self.orig_h)/self.zoom)
+        #self.view_w = int(min(self.canvas.winfo_width(), self.orig_w)/self.zoom)
+        self.view_h = int(self.canvas.winfo_height()/self.zoom)
+        self.view_w = int(self.canvas.winfo_width()/self.zoom)
+        
         self.update_display()
         self.set_status("ready", "Ready")
 
@@ -1018,23 +1110,35 @@ class SegmentationApp(ctk.CTk):
         
         # change status while zoom function is inefficient, so that user is aware
         self.set_status("loading", "Zooming out...")
-        self.zoom *= 0.9
+        
+        # apply zoom
+        if (self.zoom * 0.9) > self.zoom_min:
+            self.zoom *= 0.9
+        
+        # TODO update also self.view_x, self.view_y to focus the zoom
+        # self.view_h = int(min(self.canvas.winfo_height(), self.orig_h)/self.zoom)
+        # self.view_w = int(min(self.canvas.winfo_width(), self.orig_w)/self.zoom)
+        self.view_h = int(self.canvas.winfo_height()/self.zoom)
+        self.view_w = int(self.canvas.winfo_width()/self.zoom)
+        
         self.update_display()
         self.set_status("ready", "Ready")
         
         
     def reset_zoom(self, e=None):
         '''
-        Reset zoom (CTRL-=).
+        Reset zoom (Ctrl-0, Ctrl-Space).
         '''
         if not self.image_is_loaded():
             return
         self.zoom = 1.0
-        self.offset_x = 0
-        self.offset_y = 0
+        
+        self.view_x = 0
+        self.view_y = 0
+        self.view_w = self.canvas.winfo_width()#min(self.canvas.winfo_width(), self.orig_w)
+        self.view_h = self.canvas.winfo_height()#min(self.canvas.winfo_height(), self.orig_h)
+        
         self.update_display()
-
-
 
 
     #%% MASKING TECHNIQUES ----------------------------------------------------
@@ -1049,8 +1153,9 @@ class SegmentationApp(ctk.CTk):
         self.push_undo()
     
         # Mouse position in image coordinates
-        x = int((e.x - self.offset_x) / self.display_scale)
-        y = int((e.y - self.offset_y) / self.display_scale)
+        x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        
         r = self.brush_size // 2
     
         # Extend bounding box slightly to avoid gaps
@@ -1073,7 +1178,53 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig[y0:y1, x0:x1][erase_mask] = 0
         
         self.set_modified(True)
-        self.update_display()
+        self.update_display(update_all="Mask")
+
+    # TODO unify brush and brush_at methods?
+    def brush_at(self, x, y, add=True):
+        '''
+        Aux method to define brush position without updating display or undo.
+        '''
+        # Return immediately if no mask or no active label
+        if self.mask_orig is None or self.active_mask_id is None:
+            return
+        
+        # Brush radius
+        r = self.brush_size // 2
+        buffer = max(1, r // 2)
+        
+        # Define bounding box of the brush, clamped to image edges
+        y0 = max(0, y - r - buffer)
+        y1 = min(self.mask_orig.shape[0], y + r + buffer)
+        x0 = max(0, x - r - buffer)
+        x1 = min(self.mask_orig.shape[1], x + r + buffer)
+        
+        # Create small local coordinate arrays (only the bounding box, not the whole mask)
+        ys = np.arange(y0, y1)
+        xs = np.arange(x0, x1)
+        
+        # Efficient broadcasting to create circle mask
+        dy = ys[:, None] - y   # shape (height, 1)
+        dx = xs[None, :] - x   # shape (1, width)
+        circle = dx**2 + dy**2 <= r*r  # boolean array, shape (y1-y0, x1-x0)
+        
+        # Slice of the mask corresponding to the bounding box
+        mask_area = self.mask_orig[y0:y1, x0:x1]
+        
+        if add:
+            if self.only_on_empty.get():
+                # Paint only on pixels that are currently empty (0)
+                mask_area[circle & (mask_area == 0)] = self.active_mask_id
+            else:
+                # Paint over all pixels in the brush
+                mask_area[circle] = self.active_mask_id
+        else:
+            # Erase only pixels that match the active mask label
+            erase_mask = circle & (mask_area == self.active_mask_id)
+            mask_area[erase_mask] = 0
+        
+        # Mark mask as modified for later saving or GUI update
+        self.set_modified(True)
 
 
     def draw_brush_preview(self, e):
@@ -1082,38 +1233,94 @@ class SegmentationApp(ctk.CTk):
         size and position before painting.
         '''
         self.canvas.delete("brush")
-        if not self.brush_active: return
+        
+        if not self.brush_active:
+            return
         x, y = e.x, e.y
-        r = self.brush_size * self.display_scale / 2
-        self.canvas.create_oval(x-r, y-r, x+r, y+r,
-                                fill="", outline="#FFFF00", width=2, tag="brush")
+        r = int(self.brush_size * self.zoom / 2)        
+        outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
+        
+        self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, width=2, tag="brush")
         
     
     # SAM ---------------------------------------------------------------------
-    def sam_click(self, e, add=True):
-        '''
-        Uses the SAM model to generate a mask at the clicked point and either 
-        adds it to or removes it from the active mask, saving the previous 
-        state for undo and updating the display.
-        '''
-        if self.image_orig is None or self.active_mask_id is None: return
+    def sam_add_point(self, e, add=True, multipoint=False):
+        """
+        Add the clicked point to the list of points to be fed to SAM.
+        
+        If multipoint=False, add=True means "use only this point to compute the
+        mask, and add it", while add=False means "use only this point to
+        compute the mask, and remove it".
+        If multipoint=True, add=True means "mark this point as foreground",
+        while add=False means "mark this point as background"
+        """
+        if self.image_orig is None or self.active_mask_id is None:
+            return
+        x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        self.sam_points.append([x, y])
+        if not multipoint:
+            self.sam_pt_labels.append(1)
+            self.sam_apply(add=add, multipoint=multipoint)
+        else:
+            self.sam_pt_labels.append(1 if add else 0)
+            if add:
+                # fg point: fill with active mask color, outline black
+                pt_fill = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
+                pt_out = "black"
+            else:
+                # bg point: fill black, use the inverted active mask color for outline
+                pt_fill = "black"
+                pt_out = "#" + "".join([f"{255-c:02x}" for c in self.mask_colors[self.active_mask_id]])
+            self.canvas.create_oval(e.x-3, e.y-3, e.x+3, e.y+3, fill=pt_fill, outline=pt_out, width=1, tag="sam_pt")
+
+    
+    def sam_apply_release(self):
+        """
+        Event bound to the release of the "Multipoint" key
+        """
+        if (not self.magic_mode) or (not self.sam_points): # empty lists are false
+            return
+        self.sam_apply(multipoint=True)
+
+    
+    def sam_apply(self, add=True, multipoint=False):
+        """
+        Use the SAM to generate a mask depending on the information stored in
+        self.sam_points and self.sam_pt_labels.
+        
+        If add is True, the mask will be added; otherwise, it will be removed.
+        If multipoint is True, add is ignored and the mask will be added.
+        """
+        if self.image_orig is None or self.active_mask_id is None:
+            return
         self.set_status("loading", "SAM computing...")
         self.push_undo()
-        x = int((e.x-self.offset_x)/self.display_scale)
-        y = int((e.y-self.offset_y)/self.display_scale)
-        masks,_,_ = self.sam.predict(np.array([[x,y]]), np.array([1]), 
-                                                        multimask_output=False)
-        if add:
+        masks, _, _ = self.sam.predict(np.array(self.sam_points),
+                                       np.array(self.sam_pt_labels),
+                                       multimask_output=False)
+        
+        if not multipoint:
+            if add:
+                if self.only_on_empty.get():
+                    self.mask_orig[masks[0] & (self.mask_orig==0)] = self.active_mask_id
+                else:
+                    self.mask_orig[masks[0]] = self.active_mask_id
+            else:
+                self.mask_orig[masks[0] & (self.mask_orig==self.active_mask_id)] = 0
+        else:
             if self.only_on_empty.get():
-                self.mask_orig[masks[0] & (self.mask_orig==0)]= self.active_mask_id
+                self.mask_orig[masks[0] & (self.mask_orig==0)] = self.active_mask_id
             else:
                 self.mask_orig[masks[0]] = self.active_mask_id
-        else:
-            self.mask_orig[masks[0] & (self.mask_orig==self.active_mask_id)]=0
 
+        self.sam_points = []
+        self.sam_pt_labels = []
         self.set_modified(True)
-        self.update_display()
+        self.canvas.delete("sam_pt")
+        self.update_display(update_all="Mask")
         self.set_status("ready", "Ready")
+
 
     # CONNECTED COMPONENT -----------------------------------------------------
     def get_connected_component(self, mask, start_y, start_x, target_id):
@@ -1140,7 +1347,6 @@ class SegmentationApp(ctk.CTk):
                         stack.append((ny,nx))
         return component
 
-
     def connected_component_click(self, e, remove_only=True):
         '''
         Handles a click for the connected component tool, removing either only 
@@ -1148,10 +1354,10 @@ class SegmentationApp(ctk.CTk):
         the previous state for undo, and updating the display.
         '''
         if self.mask_orig is None or self.active_mask_id is None: return
-        y = int((e.y - self.offset_y)/self.display_scale)
-        x = int((e.x - self.offset_x)/self.display_scale)
-        comp = self.get_connected_component(self.mask_orig, y, x, 
-                                                           self.active_mask_id)
+        x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        
+        comp = self.get_connected_component(self.mask_orig, y, x, self.active_mask_id)
         self.push_undo()
         
         if remove_only:
@@ -1163,7 +1369,7 @@ class SegmentationApp(ctk.CTk):
                 self.mask_orig[(self.mask_orig==self.active_mask_id) & (~comp)]=0
         
         self.set_modified(True)
-        self.update_display()
+        self.update_display(update_all="Mask")
         
 
     # SMOOTHING (EROSION + DILATION) ------------------------------------------
@@ -1180,6 +1386,7 @@ class SegmentationApp(ctk.CTk):
         # Identify the connected component
         comp = self.get_connected_component(self.mask_orig, y, x, self.active_mask_id)
         if not comp.any():
+            self.set_status("ready", "Ready")
             return
     
         self.push_undo()
@@ -1200,7 +1407,7 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig[comp_smooth] = self.active_mask_id
         
         self.set_modified(True)
-        self.update_display()
+        self.update_display(update_all="Mask")
         self.set_status("ready", "Ready")
 
 #%% Main cycle
