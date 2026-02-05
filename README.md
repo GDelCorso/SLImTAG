@@ -140,7 +140,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [x] Ctrl+magic wand: multiple conditional points (left: positive, right: negative), activate SAM at release Ctrl, and mask preview
 
 ### Minor
-- [ ] Zoom on mouse location instead of top left corner
+- [x] Zoom on mouse location instead of top left corner
 - [x] Add statusbar
 - [ ] Brush subraction and connected component currently don't work when "Only add on empty" is active
 - [ ] Implement argparse with "--no-sam" option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)

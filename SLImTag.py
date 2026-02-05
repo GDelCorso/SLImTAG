@@ -305,12 +305,12 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
-        self.bind("<Control-plus>", self.zoom_in)
+        self.bind("<Control-plus>", lambda e: self.zoom_in())
         #self.bind("<Control-equal>", self.reset_zoom) # usually it is Ctrl-0
         self.bind("<Control-0>", self.reset_zoom)
         self.bind("<Control-KP_0>", self.reset_zoom) # also keypad for madmen like Oscar :)
         self.bind("<Control-space>", self.reset_zoom)
-        self.bind("<Control-minus>", self.zoom_out)
+        self.bind("<Control-minus>", lambda e: self.zoom_out())
         
         # Move view:
         self.bind("<Up>", lambda e: self.pan_view(0, -20))
@@ -1090,12 +1090,28 @@ class SegmentationApp(ctk.CTk):
         if (self.zoom * 1.1) < self.zoom_max:
             self.zoom *= 1.1
         
+
+        old_h = self.view_h
+        old_w = self.view_w
         # TODO update also self.view_x, self.view_y to focus the zoom
         #self.view_h = int(min(self.canvas.winfo_height(), self.orig_h)/self.zoom)
         #self.view_w = int(min(self.canvas.winfo_width(), self.orig_w)/self.zoom)
         self.view_h = int(self.canvas.winfo_height()/self.zoom)
         self.view_w = int(self.canvas.winfo_width()/self.zoom)
         
+        if e is not None:
+            x = (e.x)/self.canvas.winfo_width()
+            y = (e.y)/self.canvas.winfo_height()
+        else:
+            x = 0.5
+            y = 0.5
+        dx = round(x * (old_w - self.view_w))
+        dy = round(y * (old_h - self.view_h))
+        self.view_x += dx
+        self.view_y += dy
+            
+            
+
         self.update_display()
         self.set_status("ready", "Ready")
 
@@ -1115,11 +1131,22 @@ class SegmentationApp(ctk.CTk):
         if (self.zoom * 0.9) > self.zoom_min:
             self.zoom *= 0.9
         
-        # TODO update also self.view_x, self.view_y to focus the zoom
-        # self.view_h = int(min(self.canvas.winfo_height(), self.orig_h)/self.zoom)
-        # self.view_w = int(min(self.canvas.winfo_width(), self.orig_w)/self.zoom)
+        old_h = self.view_h
+        old_w = self.view_w
         self.view_h = int(self.canvas.winfo_height()/self.zoom)
         self.view_w = int(self.canvas.winfo_width()/self.zoom)
+        
+        if e is not None:
+            x = (e.x)/self.canvas.winfo_width()
+            y = (e.y)/self.canvas.winfo_height()
+        else: # use center of canvas
+            x = 0.5
+            y = 0.5
+        dx = round(x * (old_w - self.view_w))
+        dy = round(y * (old_h - self.view_h))
+        self.view_x += dx
+        self.view_y += dy
+
         
         self.update_display()
         self.set_status("ready", "Ready")
