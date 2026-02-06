@@ -301,6 +301,11 @@ class SegmentationApp(ctk.CTk):
         sam.to(device).eval()
         self.sam = SamPredictor(sam)
 
+        # Define the asynchronous mechanism to speed up image loading
+        self.switch_computed_magic_wand = False     # True if SAM is loaded
+        self.thread = None                          # Threading variable
+        self.lock = threading.Lock()              # To protect shared varaibles
+
         # BINDINGS ------------------------------------------------------------
         self.canvas.bind("<MouseWheel>", self.zoom_evt)
         self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
@@ -364,11 +369,6 @@ class SegmentationApp(ctk.CTk):
         self.bind("<KeyRelease-Shift_L>", lambda e: self.shiftReleased())
         self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
         
-        # Define the asynchronous mechanism to speed up image loading
-        self.switch_computed_magic_wand = False     # True if SAM is loaded
-        self.thread = None                          # Threading variable
-        self.lock = threading.Lock()              # To protect shared varaibles
-        
         
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
@@ -381,6 +381,7 @@ class SegmentationApp(ctk.CTk):
         
         #  Thread-safe upload of shared variable 
         with self.lock:
+            self.switch_computed_magic_wand = False
             # SAM model inference on image
             self.sam.set_image(np.array(self.image_orig))
             
@@ -388,7 +389,7 @@ class SegmentationApp(ctk.CTk):
             self.switch_computed_magic_wand = True
             
         print("Loaded SAM model")
-        
+        self.set_status("ready", "Ready")
         # Refresh and update display
         self.update_display()
         
@@ -486,6 +487,8 @@ class SegmentationApp(ctk.CTk):
         state = "normal" if enabled else "disabled"
         for b in self.all_action_buttons:
             b.configure(state=state)
+        if not self.switch_computed_magic_wand:
+            self.magic_btn.configure(state="disabled")
 
     def set_status(self, state, text):
         """
@@ -799,6 +802,7 @@ class SegmentationApp(ctk.CTk):
                 return
 
         self.deactivate_tools()
+        self.set_controls_state(False)
         p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
         if not p:
             return
@@ -842,7 +846,10 @@ class SegmentationApp(ctk.CTk):
             
         self.update_display()
         
-        self.set_status("ready", "Ready")
+        if self.switch_computed_magic_wand:
+            self.set_status("ready", "Ready")
+        else:
+            self.set_status("ready", "Ready (Loading image into SAM...)")
 
     def load_mask(self):
         """
