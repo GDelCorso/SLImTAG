@@ -399,6 +399,7 @@ class SegmentationApp(ctk.CTk):
         self.tk_ov = ImageTk.PhotoImage(resized)
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
         
+        
         # raise back SAM multipoints if any
         self.canvas.tag_raise("sam_pt")
 
@@ -955,13 +956,17 @@ class SegmentationApp(ctk.CTk):
             self.brush_at(x, y, add=not shift_pressed)
             self.push_undo()
             self.update_display(update_all="Mask")
+
             return
+
         
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
         self._pan_start = None
         self._drag_counter = 0
         self.update_display()
+        self.draw_brush_preview(e)
+            
 
     def on_canvas_right(self, e):
         '''
@@ -1029,6 +1034,8 @@ class SegmentationApp(ctk.CTk):
             self.push_undo() # TODO: Check problem for undo
             self.brush_at(x1, y1, add=not shift_pressed)
             self.update_display(update_all="Mask")
+            self.draw_brush_preview(e)
+            
             return
         
         # Skip some updates when zooming
@@ -1050,8 +1057,10 @@ class SegmentationApp(ctk.CTk):
                 self.brush_at(xi, yi, add=not shift_pressed)
 
             self.update_display(update_all="Mask") # update only mask
+            self.draw_brush_preview(e)
             self._last_brush_update = now
             self._prev_brush_pos = (x1, y1)
+
     
     #%% PAN & ZOOM-------------------------------------------------------------
     
