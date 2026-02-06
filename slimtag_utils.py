@@ -141,7 +141,7 @@ class EntryDialog(ctk.CTkToplevel):
         # Grab events
         self.grab_set()
         # Get focus on Entry
-        self.after(10, entry.focus_set)
+        self.after(100, entry.focus_set)
         
         # Center on parent
         self._center_on_parent()
