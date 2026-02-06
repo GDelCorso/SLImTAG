@@ -378,8 +378,6 @@ class SegmentationApp(ctk.CTk):
     #%% ASYNC METHOD FOR EFFICIENT SAM UPLOAD ---------------------------------
     def async_loader(self):
         print("Load SAM model")
-    
-        time.sleep(10)
         
         #  Thread-safe upload of shared variable 
         with self.lock:
@@ -1524,4 +1522,5 @@ class SegmentationApp(ctk.CTk):
 
 #%% Main cycle
 if __name__ == "__main__":
+
     SegmentationApp().mainloop()
