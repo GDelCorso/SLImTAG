@@ -30,6 +30,9 @@ from slimtag_utils import MultiButtonDialog, EntryDialog
 import torch
 from segment_anything import sam_model_registry, SamPredictor
 
+# Asynchronous threading import
+import threading
+
 
 
 #%% Suppress specific PyTorch warnings
@@ -361,9 +364,37 @@ class SegmentationApp(ctk.CTk):
         self.bind("<KeyRelease-Shift_L>", lambda e: self.shiftReleased())
         self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
         
+        # Define the asynchronous mechanism to speed up image loading
+        self.switch_computed_magic_wand = False     # True if SAM is loaded
+        self.thread = None                          # Threading variable
+        self.lock = threading.Lock()              # To protect shared varaibles
+        
+        
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
-
+        
+        
+        
+    #%% ASYNC METHOD FOR EFFICIENT SAM UPLOAD ---------------------------------
+    def async_loader(self):
+        print("Load SAM model")
+    
+        time.sleep(10)
+        
+        #  Thread-safe upload of shared variable 
+        with self.lock:
+            # SAM model inference on image
+            self.sam.set_image(np.array(self.image_orig))
+            
+            # Turn on swithc
+            self.switch_computed_magic_wand = True
+            
+        print("Loaded SAM model")
+        
+        # Refresh and update display
+        self.update_display()
+        
+        
         
     #%% AUX METHODS  ----------------------------------------------------------
     def update_display(self, update_all="Global"):
@@ -725,7 +756,7 @@ class SegmentationApp(ctk.CTk):
             return
         
         if self.magic_btn.cget('state') != "disabled":
-            if not self.magic_mode:
+            if not self.magic_mode and self.switch_computed_magic_wand:
                 self.deactivate_tools()
                 self.magic_mode = True
             else:
@@ -779,7 +810,11 @@ class SegmentationApp(ctk.CTk):
         self.orig_w, self.orig_h = img.size
         self.image_orig = img
         self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
-        self.sam.set_image(np.array(self.image_orig))
+        
+        # Async load of the SAM model to avoid freezed interface
+        if self.thread is None or not self.thread.is_alive():
+               self.thread = threading.Thread(target=self.async_loader, daemon=True)
+               self.thread.start()
         
         # reset masks
         self.clear_all_masks()
