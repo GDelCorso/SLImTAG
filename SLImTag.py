@@ -125,11 +125,11 @@ class SegmentationApp(ctk.CTk):
         # boolean switch to check if mask is modified and not saved
         self.modified = False
         
-        # Define the zoom status
+        # zoom & pan status
         self.zoom = 1.0
-        self._pan_start = None
         self.zoom_max = 1.0
         self.zoom_min = 1.0
+        self._pan_start = None
         
         self.zoom_label_var = tk.StringVar(self, value="Zoom: 100%")
         
@@ -155,6 +155,7 @@ class SegmentationApp(ctk.CTk):
         # brush control
         self.last_brush_pos = None
         self.brush_size = 30
+        self.mouse = {'x': None, 'y': None}
         
         # undo list
         self.undo_stack = []
@@ -171,6 +172,7 @@ class SegmentationApp(ctk.CTk):
         self.sam_points = []
         self.sam_pt_labels = []
 
+        # boolean to track if right mouse button is pressed
         self.b3_pressed = False
 
         # UI ------------------------------------------------------------------
@@ -362,11 +364,6 @@ class SegmentationApp(ctk.CTk):
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
 
-    def shiftPressed(self):
-        self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
-
-    def shiftReleased(self):
-        self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
         
     #%% AUX METHODS  ----------------------------------------------------------
     def update_display(self, update_all="Global"):
@@ -484,6 +481,14 @@ class SegmentationApp(ctk.CTk):
             else: # state == False
                 self.modified = False
                 self.title(title[1:]) # remove '*'
+
+    def shiftPressed(self):
+        # in case brush is active, set preview to "dashed"
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
+
+    def shiftReleased(self):
+        # in case brush is active, set preview to "solid"
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
     # TODO
     # def compute_zoom_limits(self):
@@ -982,9 +987,7 @@ class SegmentationApp(ctk.CTk):
         self.update_display()
         self.draw_brush_preview(e)
      
-    def on_canvas_right_release(self, e):
-        self.b3_pressed = False
-        self.on_canvas_left_release(e)
+
         
     def on_canvas_right(self, e):
         '''
@@ -994,37 +997,40 @@ class SegmentationApp(ctk.CTk):
         self.b3_pressed = True
         self.on_canvas_left(e)
         return;
-        '''
-        ctrl_pressed = (e.state & 0x0004) != 0
+        # '''
+        # ctrl_pressed = (e.state & 0x0004) != 0
         
-        # Check position
-        x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
-        y_check = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        # # Check position
+        # x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        # y_check = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
         
-        if (x_check < 0) or (x_check > self.orig_w) or (y_check < 0) or (y_check > self.orig_h):
-            check_inside_image = False
-        else:
-            check_inside_image = True
+        # if (x_check < 0) or (x_check > self.orig_w) or (y_check < 0) or (y_check > self.orig_h):
+        #     check_inside_image = False
+        # else:
+        #     check_inside_image = True
             
-        if self.smoothing_active and check_inside_image:
-            x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
-            y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
-            self.apply_smoothing(y, x, operation="erosion")
-            return
+        # if self.smoothing_active and check_inside_image:
+        #     x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        #     y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        #     self.apply_smoothing(y, x, operation="erosion")
+        #     return
     
-        if self.cc_mode and check_inside_image:
-            self.connected_component_click(e, remove_only=False)
-            return
+        # if self.cc_mode and check_inside_image:
+        #     self.connected_component_click(e, remove_only=False)
+        #     return
         
-        if self.magic_mode and check_inside_image:
-            self.sam_add_point(e, add=False, multipoint=ctrl_pressed)
-            return
+        # if self.magic_mode and check_inside_image:
+        #     self.sam_add_point(e, add=False, multipoint=ctrl_pressed)
+        #     return
         
-        if self.brush_active and check_inside_image:
-            self.brush(e, add=False)
-            return
-        '''
+        # if self.brush_active and check_inside_image:
+        #     self.brush(e, add=False)
+        #     return
+        # '''
+    def on_canvas_right_release(self, e):
+        self.b3_pressed = False
+        self.on_canvas_left_release(e)
 
     def on_canvas_drag(self, e):
         '''
@@ -1288,13 +1294,15 @@ class SegmentationApp(ctk.CTk):
 
     def draw_brush_preview(self, e):
         '''
-        Draws a semi-transparent yellow circle on the canvas to show the brush 
-        size and position before painting.
+        Draws a semi-transparent circle on the canvas to show the brush size
+        and position before painting. The circle is solid in 'add mask' mode
+        and dashed in 'remove mask' mode.
         '''
-        self.mouse = {
-            'x': e.x, 
-            'y': e.y
-        }
+        # self.mouse = {
+        #     'x': e.x, 
+        #     'y': e.y
+        # }
+        self.mouse['x'], self.mouse['y'] = e.x, e.y # store mouse position
         x, y = e.x, e.y
 
         shift_pressed = (e.state & 0x0001) != 0 or self.b3_pressed
@@ -1306,12 +1314,11 @@ class SegmentationApp(ctk.CTk):
         if not self.brush_active:
             return
 
-        r = int(self.brush_size * self.zoom / 2)        
+        r = int(self.brush_size * self.zoom / 2)
         outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
-        
         dash = (5,10) if shift_pressed else None
 
-        oval = self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
+        self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
         
     # SAM ---------------------------------------------------------------------
     def sam_add_point(self, e, add=True, multipoint=False):
