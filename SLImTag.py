@@ -350,10 +350,22 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-q>", lambda e: self.quit_program())
         self.bind("<Control-Q>", lambda e: self.quit_program())
         
+        self.bind("<KeyPress-Shift_L>", lambda e: self.shiftPressed())
+        self.bind("<KeyPress-Shift_R>", lambda e: self.shiftPressed())
+        self.bind("<KeyRelease-Shift_L>", lambda e: self.shiftReleased())
+        self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
+        
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
 
+    def shiftPressed(self):
+        print("S_Pressed")
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
 
+    def shiftReleased(self):
+        print("S_Released")
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+        
     #%% AUX METHODS  ----------------------------------------------------------
     def update_display(self, update_all="Global"):
         '''
@@ -678,6 +690,7 @@ class SegmentationApp(ctk.CTk):
                 self.brush_active = False
             self.update_button_colors()
 
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
     def toggle_cc_mode(self):
         '''
@@ -1268,17 +1281,28 @@ class SegmentationApp(ctk.CTk):
         Draws a semi-transparent yellow circle on the canvas to show the brush 
         size and position before painting.
         '''
+        self.mouse = {
+            'x': e.x, 
+            'y': e.y
+        }
+        x, y = e.x, e.y
+
+        shift_pressed = (e.state & 0x0001) != 0
+        self._draw_brush_preview(x, y, shift_pressed)
+
+    def _draw_brush_preview(self, x, y, shift_pressed=False):
         self.canvas.delete("brush")
         
         if not self.brush_active:
             return
-        x, y = e.x, e.y
+
         r = int(self.brush_size * self.zoom / 2)        
         outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
         
-        self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, width=2, tag="brush")
+        dash = (5,10) if shift_pressed else None
+
+        oval = self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
         
-    
     # SAM ---------------------------------------------------------------------
     def sam_add_point(self, e, add=True, multipoint=False):
         """
