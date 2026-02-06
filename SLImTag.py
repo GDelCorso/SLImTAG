@@ -231,11 +231,13 @@ class SegmentationApp(ctk.CTk):
         self.status_icon.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(0, 2))
         self.status_label = ctk.CTkLabel(self.statusbar, text="Initializing...")
         self.status_label.grid(row=0, column=1, sticky="w", padx=(4, 0))
+        self.status_sam_label = ctk.CTkLabel(self.statusbar, text="") # for SAM asynchronous loading
+        self.status_sam_label.grid(row=0, column=2, sticky="w", padx=(4, 0))
         
         self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
-        self.zoom_label.grid(row=0, column=3, sticky="e", padx=10)
+        self.zoom_label.grid(row=0, column=4, sticky="e", padx=10)
         
-        self.statusbar.grid_columnconfigure(2, weight=1)
+        self.statusbar.grid_columnconfigure(3, weight=1)
         
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -378,24 +380,24 @@ class SegmentationApp(ctk.CTk):
         
     #%% ASYNC METHOD FOR EFFICIENT SAM UPLOAD ---------------------------------
     def async_loader(self):
-        print("Load SAM model")
-        
-        #  Thread-safe upload of shared variable 
+        #print("Loading SAM model")
+        self.status_sam_label.configure(text="(Loading image into SAM...)")
+        #  Thread-safe upload of shared variable
         with self.lock:
             self.switch_computed_magic_wand = False
             # SAM model inference on image
             self.sam.set_image(np.array(self.image_orig))
             
-            # Turn on swithc
+            # Turn on switch
             self.switch_computed_magic_wand = True
             
-        print("Loaded SAM model")
+        #print("Loaded SAM model")
         if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
             self.set_controls_state(False)
         else:
             self.set_controls_state(True)
 
-        self.set_status("ready", "Ready")
+        self.status_sam_label.configure(text="")
         # Refresh and update display
         self.update_display()
         
@@ -852,10 +854,7 @@ class SegmentationApp(ctk.CTk):
             
         self.update_display()
         
-        if self.switch_computed_magic_wand:
-            self.set_status("ready", "Ready")
-        else:
-            self.set_status("ready", "Ready (Loading image into SAM...)")
+        self.set_status("ready", "Ready")
 
     def load_mask(self):
         """
