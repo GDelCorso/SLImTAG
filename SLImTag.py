@@ -285,7 +285,6 @@ class SegmentationApp(ctk.CTk):
         self.smoothing_btn.configure(fg_color=TOOL_OFF_COLOR)
         self.cc_btn.configure(fg_color=TOOL_OFF_COLOR)
         self.all_action_buttons = [self.brush_btn, self.magic_btn, self.cc_btn, self.smoothing_btn]
-        self.set_controls_state(False) # Deactivate all buttons
         
         # Toggle for only empty
         ctk.CTkSwitch(self.tools_panel, text="Only add on empty", variable=self.only_on_empty).grid(row=2, column=0, sticky="ew", padx=10, pady=5)
@@ -305,6 +304,8 @@ class SegmentationApp(ctk.CTk):
         self.switch_computed_magic_wand = False     # True if SAM is loaded
         self.thread = None                          # Threading variable
         self.lock = threading.Lock()              # To protect shared varaibles
+        
+        self.set_controls_state(False) # Deactivate all buttons -- must be done after defining switch_computed_magic_wand
 
         # BINDINGS ------------------------------------------------------------
         self.canvas.bind("<MouseWheel>", self.zoom_evt)
