@@ -140,26 +140,47 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [x] Ctrl+magic wand: multiple conditional points (left: positive, right: negative), activate SAM at release Ctrl, and mask preview
 
 ### Minor
-- [x] Zoom on mouse location instead of top left corner
-- [x] Add statusbar
-- [ ] Brush subraction and connected component currently don't work when "Only add on empty" is active
-- [ ] Implement argparse with "--no-sam" option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)
+
+#### General
+
+- [ ] Implement argparse with `--no-sam` option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)
+- [ ] ALTERNATIVE: implement classic scipy's region detection algorithms that are bound to magic wand when SLImTAG is called with `--no-sam`
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
 - [ ] Convert hardcoded parameters to argparse arguments
-- [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
-- [ ] To consider: in smoothing tool, add toggle for locking mask at image border, so that it is not erased (useful if mask is background)
-- [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
-- [x] When a mask is removed, a new mask additions should be placed on the first empty value of the list
+
+#### UI
+
+- [x] Add statusbar
+- [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 - [x] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 - [ ] "Unsaved changes" status does not look at the undo history ― if you open a mask, do something, then undo, the mask will still be considered "modified"
+- [ ] Bind Tab/Shift-Tab to cycle between masks
+
+#### View
+
+- [x] Zoom on mouse location instead of top left corner
+- [ ] PROBABLY NO MORE NECESSARY: Define a function "compute_zoom_limits(self)" that computes min and max zoom -- see commented pseudocode
+
+#### Masks management
+
+- [ ] BUG: Brush subraction and connected component currently don't work when "Only add on empty" is active
+- [x] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 - [ ] Allow "Clean Mask" undo
-- [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 - [ ] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
 - [ ] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
-- [ ] Smoothing on image border/contours of another mask, should not reduce dimension
-- [ ] Bind Tab/Shift-Tab to cycle between masks
-- [ ] Define a function "compute_zoom_limits(self)" that computes min and max zoom -- see commented pseudocode
+
+#### Brush
+
+- [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
+
+#### Magic wand
+
+- [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
+
+#### Smoothing
+
+- [ ] TO CONSIDER: in smoothing tool, add toggle for locking mask at image border and/or other masks border, so that it is not erased (useful e.g. if mask is background)
 
 ### Potential additional features
 - [ ] Different brush shapes (square)
