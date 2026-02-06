@@ -390,6 +390,11 @@ class SegmentationApp(ctk.CTk):
             self.switch_computed_magic_wand = True
             
         print("Loaded SAM model")
+        if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
+            self.set_controls_state(False)
+        else:
+            self.set_controls_state(True)
+
         self.set_status("ready", "Ready")
         # Refresh and update display
         self.update_display()
