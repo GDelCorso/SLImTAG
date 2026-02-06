@@ -171,6 +171,8 @@ class SegmentationApp(ctk.CTk):
         self.sam_points = []
         self.sam_pt_labels = []
 
+        self.b3_pressed = False
+
         # UI ------------------------------------------------------------------
         
         # Top Menu
@@ -302,7 +304,9 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<Button-1>", self.on_canvas_left)
         self.canvas.bind("<Button-3>", self.on_canvas_right)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<B3-Motion>", self.on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
+        self.canvas.bind("<ButtonRelease-3>", self.on_canvas_right_release)
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
         self.bind("<Control-plus>", lambda e: self.zoom_in())
@@ -359,11 +363,9 @@ class SegmentationApp(ctk.CTk):
         self.set_status("ready", "Ready")
 
     def shiftPressed(self):
-        print("S_Pressed")
         self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
 
     def shiftReleased(self):
-        print("S_Released")
         self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
         
     #%% AUX METHODS  ----------------------------------------------------------
@@ -928,7 +930,7 @@ class SegmentationApp(ctk.CTk):
         (brush, magic wand, connected component, or smoothing) and using Shift 
         to modify behaviour.
         '''
-        shift_pressed = (e.state & 0x0001) != 0
+        shift_pressed = (e.state & 0x0001) != 0 or self.b3_pressed
         ctrl_pressed = (e.state & 0x0004) != 0
         self._prev_brush_pos = None
         
@@ -969,7 +971,7 @@ class SegmentationApp(ctk.CTk):
             self.brush_at(x, y, add=not shift_pressed)
             self.push_undo()
             self.update_display(update_all="Mask")
-
+            self.draw_brush_preview(e)
             return
 
         
@@ -979,12 +981,19 @@ class SegmentationApp(ctk.CTk):
         self._drag_counter = 0
         self.update_display()
         self.draw_brush_preview(e)
-            
-
+     
+    def on_canvas_right_release(self, e):
+        self.b3_pressed = False
+        self.on_canvas_left_release(e)
+        
     def on_canvas_right(self, e):
         '''
         Handles right-clicks on the canvas, applying the active tool's removal 
         or erosion action without toggling tools.
+        '''
+        self.b3_pressed = True
+        self.on_canvas_left(e)
+        return;
         '''
         ctrl_pressed = (e.state & 0x0004) != 0
         
@@ -1015,6 +1024,7 @@ class SegmentationApp(ctk.CTk):
         if self.brush_active and check_inside_image:
             self.brush(e, add=False)
             return
+        '''
 
     def on_canvas_drag(self, e):
         '''
@@ -1022,7 +1032,7 @@ class SegmentationApp(ctk.CTk):
         Draws one circle per event, using add/subtract depending on Shift.
         No interpolation between points to avoid undesired smoothing.
         '''
-        shift_pressed = (e.state & 0x0001) != 0
+        shift_pressed = (e.state & 0x0001) != 0 or self.b3_pressed
         
         # Move the canvas if not tools selected
         if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
@@ -1287,7 +1297,7 @@ class SegmentationApp(ctk.CTk):
         }
         x, y = e.x, e.y
 
-        shift_pressed = (e.state & 0x0001) != 0
+        shift_pressed = (e.state & 0x0001) != 0 or self.b3_pressed
         self._draw_brush_preview(x, y, shift_pressed)
 
     def _draw_brush_preview(self, x, y, shift_pressed=False):
