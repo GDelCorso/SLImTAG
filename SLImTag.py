@@ -10,6 +10,7 @@ Giulio Del Corso & Oscar Papini
 #%% Libraries
 import os
 import time
+import shutil
 
 # Numerical arrays manipulation
 import numpy as np
@@ -148,6 +149,12 @@ class SegmentationApp(ctk.CTk):
         
         # switch for locking mask
         self.only_on_empty = tk.BooleanVar(self, value=False)
+        
+        # List images and index for folder segmentation
+        self.list_images = None
+        self.list_index = None
+        self.path_aux_save = None
+        self.path_original_image = None
 
         # tools status
         self.brush_active = False
@@ -200,11 +207,13 @@ class SegmentationApp(ctk.CTk):
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
+        image_menu.add_command(label="Import Folder", command=self.load_folder, accelerator="Ctrl+F")
         self.menu_bar.add_cascade(label="Image", menu=image_menu)
         # Menu Mask (top menu)
         mask_menu = tk.Menu(self.menu_bar, tearoff=0)
         mask_menu.add_command(label="Load mask", command=self.load_mask)
-        mask_menu.add_command(label="Save mask", command=self.save_mask, accelerator="Ctrl+S")
+        mask_menu.add_command(label="Save mask as", command= lambda s=False : self.save_mask(switch_fast=s))
+        mask_menu.add_command(label="Save mask", command= lambda s=True : self.save_mask(switch_fast=s), accelerator="Ctrl+S")
         mask_menu.add_separator()
         mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
         mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
@@ -362,8 +371,10 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-Z>", lambda e: self.undo())
         self.bind("<Control-I>", lambda e: self.load_image())
         self.bind("<Control-i>", lambda e: self.load_image())
-        self.bind("<Control-S>", lambda e: self.save_mask())
-        self.bind("<Control-s>", lambda e: self.save_mask())
+        self.bind("<Control-F>", lambda e: self.load_folder())
+        self.bind("<Control-f>", lambda e: self.load_folder())
+        self.bind("<Control-S>", lambda e: self.save_mask(switch_fast=True))
+        self.bind("<Control-s>", lambda e: self.save_mask(switch_fast=True))
         self.bind("<Control-q>", lambda e: self.quit_program())
         self.bind("<Control-Q>", lambda e: self.quit_program())
         
@@ -371,6 +382,10 @@ class SegmentationApp(ctk.CTk):
         self.bind("<KeyPress-Shift_R>", lambda e: self.shiftPressed())
         self.bind("<KeyRelease-Shift_L>", lambda e: self.shiftReleased())
         self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
+        
+        # Next image
+        self.bind("<.>", lambda e: self.next_image())
+        self.bind("<.>", lambda e: self.next_image())
         
         
         # Finally, set status to "Ready"
@@ -561,19 +576,24 @@ class SegmentationApp(ctk.CTk):
         Quit program.
         """
         if self.modified:
-            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
-                                        buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
-                                       )
-            answer = confirm.return_value
-            if answer == "save":
-                self.save_mask()
-                self.quit()
-                self.destroy()
-            elif answer == "discard":
+            if self.list_images != None:
+                self.save_mask(switch_fast=True)
                 self.quit()
                 self.destroy()
             else:
-                return
+                confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                            buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
+                                           )
+                answer = confirm.return_value
+                if answer == "save":
+                    self.save_mask()
+                    self.quit()
+                    self.destroy()
+                elif answer == "discard":
+                    self.quit()
+                    self.destroy()
+                else:
+                    return
         else:
             self.quit()
             self.destroy()
@@ -791,7 +811,7 @@ class SegmentationApp(ctk.CTk):
 
 
     #%% IMAGE AND MASK --------------------------------------------------------
-    def load_image(self):
+    def load_image(self, path=None):
         '''
         Load a .png or .jpg image and define and empty mask on it.
         '''
@@ -811,9 +831,21 @@ class SegmentationApp(ctk.CTk):
 
         self.deactivate_tools()
         self.set_controls_state(False)
-        p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
-        if not p:
-            return
+        
+        
+        # Dialog
+        if path==None:
+            # Reset path
+            self.list_images = None
+            self.list_index = 0
+            
+            p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
+            if not p:
+                return
+            
+            self.path_original_image = p
+        else:
+            p = path
 
         self.set_status("loading", "Loading image...")
         img = Image.open(p).convert("RGB")
@@ -855,6 +887,78 @@ class SegmentationApp(ctk.CTk):
         self.update_display()
         
         self.set_status("ready", "Ready")
+        
+
+        
+    def load_folder(self):
+        '''
+        Aux function to load a whole folder to speed up image segmentation
+        '''
+        
+        # Check already existing images/mask
+        if self.modified:
+            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                        buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
+                                       )
+            answer = confirm.return_value
+            if answer == "save":
+                self.save_mask()
+                self.set_modified(False)
+            elif answer == "discard":
+                self.set_modified(False)
+            else:
+                return
+            
+        self.deactivate_tools()
+        self.set_controls_state(False)
+        
+        # Select a directory
+        path_directory =  filedialog.askdirectory()
+        if not path_directory:
+            return
+        
+        # Define an aux directory to save masks:
+        self.path_aux_save = path_directory+"_mask"
+            
+        if os.path.isdir(self.path_aux_save): # TODO improve
+            shutil.rmtree(self.path_aux_save)
+        os.mkdir(self.path_aux_save)
+
+        # Define the list of possible images
+        self.list_images = sorted([os.path.join(path_directory, f) for f in 
+                            os.listdir(path_directory)
+                            if f.lower().endswith((".png", ".jpg", ".jpeg"))])
+        self.list_index = 0
+        
+        # Load the image corresponding to list index
+        self.set_status("loading", "Loading image...")
+        
+        self.load_image(path=self.list_images[self.list_index])        
+        
+        self.set_status("ready", "Ready")
+        
+        
+    def next_image(self):
+        '''
+        Binding for next image
+        '''
+        
+        if self.list_images != None and (self.list_index<len(self.list_images)-1):
+            
+            
+            # Load the image corresponding to list index
+            self.set_status("loading", "Loading next image...")
+            
+            # Save # TODO - Add a warning
+            self.save_mask(switch_fast=True)
+            
+            self.list_index += 1
+        
+            self.load_image(path=self.list_images[self.list_index])        
+            
+            self.set_status("ready", "Ready")
+            
+        
 
     def load_mask(self):
         """
@@ -939,7 +1043,7 @@ class SegmentationApp(ctk.CTk):
         self.set_status("ready", "Ready")
 
 
-    def save_mask(self, alpha=0.6):
+    def save_mask(self, switch_fast=False):
         '''
         Save mask as a proper indexed png file and an associated png image to 
         see the identified masks.
@@ -950,9 +1054,18 @@ class SegmentationApp(ctk.CTk):
         if self.mask_orig is None:
             return
     
-        p = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG indexed", "*.png")])
-        if not p:
-            return
+        if not switch_fast:
+            # Save as()
+            p = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG indexed", "*.png")])
+            if not p:
+                return
+        else: # Save()
+            # If working with a folder
+            if self.list_images != None:
+                p = os.path.join(self.path_aux_save, os.path.basename(self.list_images[self.list_index]))
+            # Otherwise
+            else:
+                p = os.path.splitext(self.path_original_image)[0] + "_mask.png"
         
         self.set_status("loading", "Saving mask...")
     
@@ -970,6 +1083,8 @@ class SegmentationApp(ctk.CTk):
         
         self.set_modified(False)
         self.set_status("ready", "Ready")
+     
+            
 
 
 
