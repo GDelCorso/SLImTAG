@@ -95,11 +95,11 @@ class MultiButtonDialog(ctk.CTkToplevel):
         self.geometry(f"+{x}+{y}")
 
 class EntryDialog(ctk.CTkToplevel):
-    def __init__(self, parent, message=""):
+    def __init__(self, parent, message="", value=""):
         super().__init__(parent)
 
         self.parent = parent
-        self.tk_value = tk.StringVar(self, value="")
+        self.tk_value = tk.StringVar(self, value=value)
         self.value = None # to expose it
 
         self.title("SLImTAG")

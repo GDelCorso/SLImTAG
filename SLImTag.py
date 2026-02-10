@@ -11,6 +11,9 @@ Giulio Del Corso & Oscar Papini
 import os
 import time
 import shutil
+import sys
+
+sys.path.append('MyColorPicker')
 
 # Numerical arrays manipulation
 import numpy as np
@@ -23,6 +26,9 @@ from PIL import Image, ImageDraw, ImageTk
 import tkinter as tk
 from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
+
+# MyColorPicker GUI
+from MyColorPicker import *
 
 # Custom utils
 from slimtag_utils import MultiButtonDialog, EntryDialog
@@ -384,8 +390,8 @@ class SegmentationApp(ctk.CTk):
         self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
         
         # Next image
-        self.bind("<.>", lambda e: self.next_image())
-        self.bind("<.>", lambda e: self.next_image())
+        #self.bind("<.>", lambda e: self.next_image())
+        #self.bind("<.>", lambda e: self.next_image())
         
         
         # Finally, set status to "Ready"
@@ -625,7 +631,7 @@ class SegmentationApp(ctk.CTk):
 
 
     # MASK MANAGEMENT ---------------------------------------------------------
-    def add_mask(self):
+    def add_mask(self, name=None):
         '''
         Creates a new mask, asks the user for a name via dialog, assigns it a 
         unique ID and a color, and updates the UI accordingly.
@@ -638,9 +644,10 @@ class SegmentationApp(ctk.CTk):
         if len(self.mask_labels) >= MAX_MASKS:
             return
         
+        if name is None:
         # Ask user for mask name
-        name_dialog = EntryDialog(self, message="New mask name:")
-        name = name_dialog.value
+            name_dialog = EntryDialog(self, message="New mask name:")
+            name = name_dialog.value
         if not name:  # User cancelled or empty
             return
         
@@ -654,15 +661,17 @@ class SegmentationApp(ctk.CTk):
 
         self.set_controls_state(True) # activate buttons if there is at least one mask
     
-    def create_mask_widget(self, mid):
-        circle_size = 21
-        mask_frame = ctk.CTkFrame(self.mask_list_frame)
-        mask_frame._default_fg_color = mask_frame.cget("fg_color")
+    def _crc(self, mid, circle_size = 21):
         color_circle = Image.new("RGBA", (circle_size+1, circle_size+1), (0, 0, 0, 0))
         color_circle_draw = ImageDraw.Draw(color_circle)
         color_circle_draw.ellipse((0, 0, circle_size, circle_size), fill=self.mask_colors[mid])
-        mask_crc = ctk.CTkLabel(mask_frame, text="", image=ctk.CTkImage(color_circle, size=(circle_size+1, circle_size+1)))
-        mask_crc.grid(row=0, column=0, padx=(10,5), pady=10)
+        return ctk.CTkImage(color_circle, size=(circle_size+1, circle_size+1))
+
+    def create_mask_widget(self, mid):
+        mask_frame = ctk.CTkFrame(self.mask_list_frame)
+        mask_frame._default_fg_color = mask_frame.cget("fg_color")
+        mask_frame.crc = ctk.CTkLabel(mask_frame, text="", image=self._crc(mid))
+        mask_frame.crc.grid(row=0, column=0, padx=(10,5), pady=10)
         mask_frame.lbl = ctk.CTkLabel(mask_frame, text=f"{mid}: {self.mask_labels[mid]}", anchor="w")
         mask_frame.lbl.grid(row=0, column=1, sticky="ew", padx=5, pady=10)
         mask_frame._default_text_color = mask_frame.lbl.cget("text_color")
@@ -671,16 +680,19 @@ class SegmentationApp(ctk.CTk):
                                   width=12, height=12,
                                   fg_color="transparent",
                                   text_color="red",
-                                  command=lambda mid=mid: self.clear_mask(mid))
+                                  command=lambda: self.clear_mask(mid))
         clear_btn.grid(row=0, column=2, padx=(5,10), pady=10)
         clear_btn.bind("<Enter>", lambda e: clear_btn.configure(fg_color="#CC0000", text_color="white"))
         clear_btn.bind("<Leave>", lambda e: clear_btn.configure(fg_color="transparent", text_color="red"))
         mask_frame.grid_columnconfigure(1, weight=1)
-        mask_frame.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
-        mask_crc.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
-        mask_frame.lbl.bind("<Button-1>", lambda e, mid=mid: self.change_mask(e, mid))
+        mask_frame.bind("<Button-1>", lambda e: self.change_mask(e, mid))
+        mask_frame.bind("<Button-3>", lambda e: self.update_mask(e, mid))
+        mask_frame.crc.bind("<Button-1>", lambda e: self.change_mask(e, mid))
+        mask_frame.crc.bind("<Button-3>", lambda e: self.update_mask(e, mid))
+        mask_frame.lbl.bind("<Button-1>", lambda e: self.change_mask(e, mid))
+        mask_frame.lbl.bind("<Button-3>", lambda e: self.update_mask(e, mid))
         if 1 <= mid <= 9:
-            self.bind(f"<Key-{mid}>", lambda e, tid=mid: self.change_mask(e, tid))
+            self.bind(f"<Key-{mid}>", lambda e: self.change_mask(e, mid))
         return mask_frame
 
     def change_mask(self, e=None, target_id=None):
@@ -700,6 +712,37 @@ class SegmentationApp(ctk.CTk):
         self.update_button_colors()
         self.set_controls_state(True)
 
+    def update_mask(self, e, target_id):
+        context_menu = tk.Menu(self, tearoff=0)
+        context_menu.add_command(label="Rename", command=lambda: self.rename_mask(target_id))
+        context_menu.add_command(label="Update Color", command=lambda: self.update_color_mask(target_id))
+        context_menu.add_separator()
+        context_menu.add_command(label="Esci", command=lambda: context_menu.destroy())
+        context_menu.post(e.x_root, e.y_root)
+
+    def rename_mask(self, target_id):
+        self.deactivate_tools()
+        name_dialog = EntryDialog(self, message="Rename Mask:", value=self.mask_labels[target_id])
+        name = name_dialog.value
+        if not name:  # User cancelled or empty
+            return
+        
+        # Update Widget
+        self.mask_labels[target_id] = name 
+        self.mask_widgets[target_id].lbl.configure(text=f"{target_id}: {self.mask_labels[target_id]}")
+        self.update_display(update_all="Mask")
+    
+    def update_color_mask(self, target_id): 
+        self.deactivate_tools()
+        color = MyColorPicker(initial_color=ColorHelper.rgbToHEX(self.mask_colors[target_id])).get()
+        if color == None:
+            return  
+        
+        # Update Widget
+        self.mask_colors[target_id] = ColorHelper.hexToRGB(color)
+        self.mask_widgets[target_id].crc.configure(image=self._crc(target_id))
+        self.update_display(update_all="Mask")
+    
     # CLEAR MASK --------------------------------------------------------------
     def clear_mask(self, mid):
         '''
@@ -883,7 +926,8 @@ class SegmentationApp(ctk.CTk):
         self.view_y = 0
         self.view_w = self.canvas.winfo_width()#min(self.canvas.winfo_width(), self.orig_w)
         self.view_h = self.canvas.winfo_height()#min(self.canvas.winfo_height(), self.orig_h)
-            
+        
+        self.add_mask("mask_1")
         self.update_display()
         
         self.set_status("ready", "Ready")
