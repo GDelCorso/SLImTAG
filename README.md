@@ -89,17 +89,26 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 
 ![Interface](images/gui.png)
 
-The first step is to load an image (in PNG or JPG) using `Image > Import Image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut.
+### Import Images
+
+The first step is to load an image (in PNG or JPG) using `Image > Import image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut. Alternative, it is possible to choose `Image > Import folder` to load all PNG and JPG images of a folder; in this case, images are shown one at a time in alphabetical order, and a click on the `Next image` button (or the <kbd>.</kbd> shortcut) will advance to the next image. Moreover, current masks will _always_ be saved after a click on `Next image` or when the program is closed.
 
 ### Mask Actions
 
-Use the `Add new mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear i a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9.
+Use the `Add new mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear i a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9. <kbd>Tab</kbd> (respectively <kbd>Shift</kbd>+<kbd>Tab</kbd>) cycles through the masks, selecting the next (respectively previous) one as active.
 
 Click on the small `×` button next to a mask to remove ALL the regions marked with it, and also remove the mask from the list. The active mask can be also removed via the menu `Mask > Clear active mask`. ALL masks can be removed via `Mask > Clear all masks`. **Any "clear mask" action cannot be undone.**
 
-`Mask > Save Mask` saves the mask as an indexed PNG file, and a copy of the original image with a semi-transparent PNG overlay of the masks.
+Right-clicking on a mask opens a contextual menu with the options to rename the mask, change its color, delete it, or set it as the active mask.
 
-`Mask > Load Mask` loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
+`Mask > Save mask` (shortcut: <kbd>Ctrl</kbd>+<kbd>S</kbd>) saves the mask as an indexed PNG file with its default name and position:
+
+- for single images, the mask will have the same name as the original image with `_mask` appended, and will be placed in the same folder;
+- for folders, any mask will be saved with the same name as the original image in a folder named `<Folder>_mask` (where `<Folder>` is the name of the folder containing the images). **Please note that `<Folder>_mask` will be overwritten if already existing upon loading `<Folder>`.**
+
+`Mask > Save mask as...` instead allows the user to choose a name and position for the mask.
+
+`Mask > Load mask` loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
 
 ### Buttons
 
@@ -124,7 +133,7 @@ For the brush tool, click-and-drag with the **left** button follows the mouse mo
 
 Zoom is regulated via the `View` menu or by scrolling with the mouse wheel. Also <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> work for zoom in/out, and either <kbd>Ctrl</kbd>+<kbd>0</kbd> or <kbd>Ctrl</kbd>+<kbd>space</kbd> reset the zoom.
 
-When **no** tool is selected, left click-and-drag to pan the image.
+When **no** tool is selected, left click-and-drag to pan the image. This can also be done using the middle-click (i.e., by clicking on the mouse wheel), even when a tool is selected.
 
 ### Multipoint SAM
 
@@ -148,6 +157,8 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
 - [ ] Convert hardcoded parameters to argparse arguments
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
+- [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
+- [ ] Move color picker to utils (and cleanup its code)
 
 #### UI
 

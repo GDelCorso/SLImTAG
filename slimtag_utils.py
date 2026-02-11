@@ -112,6 +112,7 @@ class EntryDialog(ctk.CTkToplevel):
         ctk.CTkLabel(input_frame, text=message, wraplength=300, justify="left").grid(row=0, column=0, padx=(5, 10), sticky="ew")
         entry = ctk.CTkEntry(input_frame, textvariable=self.tk_value)
         entry.grid(row=0, column=1, padx=(0, 5), sticky="ew")
+        entry.icursor("end")
         
         input_frame.grid_columnconfigure(1, weight=1)
 

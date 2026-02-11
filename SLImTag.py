@@ -3,7 +3,7 @@ SLImTAG gui. Version 1.0
 
 20 Jan 2026
 
-Giulio Del Corso & Oscar Papini
+Giulio Del Corso, Oscar Papini & Federico Volpini
 '''
 
 
@@ -11,9 +11,9 @@ Giulio Del Corso & Oscar Papini
 import os
 import time
 import shutil
-import sys
+import sys # TODO usato solo per sys.path sotto
 
-sys.path.append('MyColorPicker')
+sys.path.append('MyColorPicker') # TODO spostare colorpicker in utils
 
 # Numerical arrays manipulation
 import numpy as np
@@ -28,7 +28,7 @@ from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # MyColorPicker GUI
-from MyColorPicker import *
+from MyColorPicker import ColorHelper, MyColorPicker # TODO spostare in utils
 
 # Custom utils
 from slimtag_utils import MultiButtonDialog, EntryDialog
@@ -161,13 +161,14 @@ class SegmentationApp(ctk.CTk):
         self.list_index = None
         self.path_aux_save = None
         self.path_original_image = None
+        
+        self.images_num_label_var = tk.StringVar(self, value="Image 0 of 0")
 
         # tools status
         self.brush_active = False
         self.magic_mode = False
         self.cc_mode = False 
         self.smoothing_active = False
-        self.mid_pressed = False
 
         # brush control
         self.last_brush_pos = None
@@ -189,8 +190,9 @@ class SegmentationApp(ctk.CTk):
         self.sam_points = []
         self.sam_pt_labels = []
 
-        # boolean to track if right mouse button is pressed
+        # boolean to track if mouse buttons are pressed
         self.b3_pressed = False
+        self.mid_pressed = False
 
         # UI ------------------------------------------------------------------
         
@@ -214,13 +216,13 @@ class SegmentationApp(ctk.CTk):
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
-        image_menu.add_command(label="Import Folder", command=self.load_folder, accelerator="Ctrl+F")
+        image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F")
         self.menu_bar.add_cascade(label="Image", menu=image_menu)
         # Menu Mask (top menu)
         mask_menu = tk.Menu(self.menu_bar, tearoff=0)
         mask_menu.add_command(label="Load mask", command=self.load_mask)
-        mask_menu.add_command(label="Save mask as", command= lambda s=False : self.save_mask(switch_fast=s))
-        mask_menu.add_command(label="Save mask", command= lambda s=True : self.save_mask(switch_fast=s), accelerator="Ctrl+S")
+        mask_menu.add_command(label="Save mask", command=lambda s=True: self.save_mask(switch_fast=s), accelerator="Ctrl+S")
+        mask_menu.add_command(label="Save mask as...", command=lambda s=False: self.save_mask(switch_fast=s))
         mask_menu.add_separator()
         mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
         mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
@@ -228,16 +230,16 @@ class SegmentationApp(ctk.CTk):
         
         panels_width = 250
         # Left panel for tools
-        self.tools_panel = ctk.CTkFrame(self, width=panels_width)
-        self.tools_panel.grid(row=0, column=0, sticky="nsew")
+        self.left_panel = ctk.CTkFrame(self, width=panels_width)
+        self.left_panel.grid(row=0, column=0, sticky="nsew")
         
         # Main canvas
         self.canvas = ctk.CTkCanvas(self, bg="black")
         self.canvas.grid(row=0, column=1, sticky="nsew")
         
         # Right panel for masks
-        self.masks_panel = ctk.CTkFrame(self, width=panels_width)
-        self.masks_panel.grid(row=0, column=2, sticky="nsew")
+        self.right_panel = ctk.CTkFrame(self, width=panels_width)
+        self.right_panel.grid(row=0, column=2, sticky="nsew")
         
         # Statusbar
         self.statusbar = ctk.CTkFrame(self, height=24, fg_color=("gray92", "gray14"))
@@ -260,20 +262,31 @@ class SegmentationApp(ctk.CTk):
         
         # Mask controls
         # Add mask button
-        ctk.CTkButton(self.masks_panel, text="Add new mask [N]", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
+        ctk.CTkButton(self.right_panel, text="Add new mask [N]", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
         
         # ScrollFrame for mask list
-        self.mask_list_frame = ctk.CTkScrollableFrame(self.masks_panel)
-        self.mask_list_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        self.mask_list_frame = ctk.CTkScrollableFrame(self.right_panel)
+        self.mask_list_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         
-        self.masks_panel.grid_rowconfigure(1, weight=1)
+        # Images in folder navigation frame
+        self.images_in_folder_frame = ctk.CTkFrame(self.right_panel)
+        self.images_in_folder_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        self.images_in_folder_label = ctk.CTkLabel(self.images_in_folder_frame, textvariable=self.images_num_label_var)
+        self.images_in_folder_label.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        self.next_image_btn = ctk.CTkButton(self.images_in_folder_frame, text="Next image [.]", command=self.next_image)
+        self.next_image_btn.grid(row=1, column=0, sticky="ew", padx=10, pady=(5, 10))
+        self.next_image_btn.configure(state="disabled")
+        
+        self.images_in_folder_frame.grid_columnconfigure(0, weight=1)
+        
+        self.right_panel.grid_rowconfigure(1, weight=1)
 
         # Tool buttons
         # Frame for buttons
-        self.tools_btn_frame = ctk.CTkFrame(self.tools_panel)
+        self.tools_btn_frame = ctk.CTkFrame(self.left_panel)
         self.tools_btn_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
         # Frame for tool options
-        self.tool_opt_frame = ctk.CTkFrame(self.tools_panel)
+        self.tool_opt_frame = ctk.CTkFrame(self.left_panel)
         self.tool_opt_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         
         self.brush_btn = ctk.CTkButton(self.tools_btn_frame, text="Brush [B]", command=self.toggle_brush)
@@ -305,12 +318,12 @@ class SegmentationApp(ctk.CTk):
         self.all_action_buttons = [self.brush_btn, self.magic_btn, self.cc_btn, self.smoothing_btn]
         
         # Toggle for only empty
-        ctk.CTkSwitch(self.tools_panel, text="Only add on empty", variable=self.only_on_empty).grid(row=2, column=0, sticky="ew", padx=10, pady=5)
+        ctk.CTkSwitch(self.left_panel, text="Only add on empty", variable=self.only_on_empty).grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
         # Undo button
-        ctk.CTkButton(self.tools_panel, text="Undo [Ctrl-Z]", command=self.undo).grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
+        ctk.CTkButton(self.left_panel, text="Undo [Ctrl-Z]", command=self.undo).grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
 
-        self.tools_panel.grid_rowconfigure(1, weight=1)
+        self.left_panel.grid_rowconfigure(1, weight=1)
 
         # SAM -----------------------------------------------------------------
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -400,36 +413,14 @@ class SegmentationApp(ctk.CTk):
         
         
         # Next image
-        #self.bind("<.>", lambda e: self.next_image())
-        #self.bind("<.>", lambda e: self.next_image())
+        self.bind("<KeyPress-period>", lambda e: self.next_image())
         
         
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
         
         
-    def tab(self):
-        return self._tab(-1, 0, 1)
 
-    def shiftTab(self):
-        return self._tab(0, -1, -1)
-
-    def _tab(self, id_key_to_check, id_key_to_get, increment):
-        if len(self.mask_labels) == 0: 
-            return
-
-        keys = list(self.mask_labels.keys())
-
-        if len(self.mask_labels) == 1: 
-            self.change_mask(keys[0])
-            return
-
-        if(self.active_mask_id == keys[id_key_to_check]):
-            self.change_mask(keys[id_key_to_get])
-            return;
-
-        newIndex = keys.index(self.active_mask_id) + increment
-        self.change_mask(keys[newIndex])
 
 
         
@@ -538,7 +529,7 @@ class SegmentationApp(ctk.CTk):
                                      buttons=[("Import image...", "import"), ("Cancel", None)])
             action = warn.return_value
             if action == "import":
-                self.load_image(add_mask=False)
+                self.load_image()
             else:
                 return False
         return True
@@ -585,15 +576,32 @@ class SegmentationApp(ctk.CTk):
         # in case brush is active, set preview to "solid"
         self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
-    # TODO
-    # def compute_zoom_limits(self):
-    #     """
-    #     Compute new zoom limits when an image is loaded or when the canvas is resized,
-    #     depending on the image size and the (current/updated) canvas size
-    #     """
-    #     if an image is not loaded: return
-    #     compute limits and set self.zoom_min and self.zoom_max
-    #     call this function from load_image and aso bind it to the function called at window resize
+    def tab(self):
+        return self._tab(-1, 0, 1)
+
+    def shiftTab(self):
+        return self._tab(0, -1, -1)
+
+    def _tab(self, id_key_to_check, id_key_to_get, increment):
+        """
+        Use TAB to cycle through masks
+        """
+        if len(self.mask_labels) == 0: # if there are no mask, do nothing
+            return
+
+        keys = list(self.mask_labels.keys())
+
+        if len(self.mask_labels) == 1: 
+            self.change_mask(keys[0])
+            return
+
+        if self.active_mask_id == keys[id_key_to_check]:
+            self.change_mask(keys[id_key_to_get])
+            return
+
+        newIndex = keys.index(self.active_mask_id) + increment
+        self.change_mask(keys[newIndex])
+
 
     def on_resize(self, e):
         """
@@ -617,6 +625,7 @@ class SegmentationApp(ctk.CTk):
         """
         if self.modified:
             if self.list_images != None:
+                # in folder mode, bypass check and always save changes on the current mask
                 self.save_mask(switch_fast=True)
                 self.quit()
                 self.destroy()
@@ -696,6 +705,7 @@ class SegmentationApp(ctk.CTk):
         self.set_controls_state(True) # activate buttons if there is at least one mask
     
     def _crc(self, mid, circle_size = 21):
+        # aux function that draws a circle for the mask with ID mid
         color_circle = Image.new("RGBA", (circle_size+1, circle_size+1), (0, 0, 0, 0))
         color_circle_draw = ImageDraw.Draw(color_circle)
         color_circle_draw.ellipse((0, 0, circle_size, circle_size), fill=self.mask_colors[mid])
@@ -750,22 +760,22 @@ class SegmentationApp(ctk.CTk):
 
     def update_mask(self, e, target_id):
         if hasattr(self, 'active_context_menu'):
-            self.context_menu.destroy()
+            self.active_context_menu.destroy()
 
         context_menu = tk.Menu(self, tearoff=0)
-        context_menu.add_command(label="Rename", command=lambda: self.rename_mask(target_id))
-        context_menu.add_command(label="Update Color", command=lambda: self.update_color_mask(target_id))
-        context_menu.add_command(label="Set Active", command=lambda: self.change_mask(target_id))
-        context_menu.add_command(label="Delete", command=lambda: self.clear_mask(target_id))
+        context_menu.add_command(label="Rename mask", command=lambda: self.rename_mask(target_id))
+        context_menu.add_command(label="Change mask color", command=lambda: self.update_color_mask(target_id))
+        context_menu.add_command(label="Set as active mask", command=lambda: self.change_mask(target_id))
+        context_menu.add_command(label="Delete mask", command=lambda: self.clear_mask(target_id))
         context_menu.add_separator()
-        context_menu.add_command(label="Quit menu", command=lambda: context_menu.destroy())
+        context_menu.add_command(label="Close this menu", command=lambda: context_menu.destroy())
         context_menu.post(e.x_root, e.y_root)
 
         self.active_context_menu = context_menu
 
     def rename_mask(self, target_id):
         self.deactivate_tools()
-        name_dialog = EntryDialog(self, message="Rename Mask:", value=self.mask_labels[target_id])
+        name_dialog = EntryDialog(self, message="New mask name:", value=self.mask_labels[target_id])
         name = name_dialog.value
         if not name:  # User cancelled or empty
             return
@@ -899,7 +909,7 @@ class SegmentationApp(ctk.CTk):
     #%% IMAGE AND MASK --------------------------------------------------------
     def load_image(self, path=None, add_mask=True):
         '''
-        Load a .png or .jpg image and define and empty mask on it.
+        Load a .png or .jpg image and define an empty mask on it.
         '''
 
         if self.modified:
@@ -920,7 +930,7 @@ class SegmentationApp(ctk.CTk):
         
         
         # Dialog
-        if path==None:
+        if path is None:
             # Reset path
             self.list_images = None
             self.list_index = 0
@@ -974,6 +984,10 @@ class SegmentationApp(ctk.CTk):
             self.add_mask("mask_1")
         self.update_display()
         
+        if self.list_images is None:
+            self.images_num_label_var.set("Image 1 of 1")
+            self.next_image_btn.configure(state="disabled")
+        
         self.set_status("ready", "Ready")
         
 
@@ -1020,8 +1034,12 @@ class SegmentationApp(ctk.CTk):
         
         # Load the image corresponding to list index
         self.set_status("loading", "Loading image...")
+
         
-        self.load_image(path=self.list_images[self.list_index])        
+        self.load_image(path=self.list_images[self.list_index])
+        
+        self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
+        self.next_image_btn.configure(state="normal")
         
         self.set_status("ready", "Ready")
         
@@ -1031,7 +1049,7 @@ class SegmentationApp(ctk.CTk):
         Binding for next image
         '''
         
-        if self.list_images != None and (self.list_index<len(self.list_images)-1):
+        if self.list_images != None and (self.list_index < len(self.list_images)-1):
             
             
             # Load the image corresponding to list index
@@ -1044,6 +1062,7 @@ class SegmentationApp(ctk.CTk):
         
             self.load_image(path=self.list_images[self.list_index])        
             
+            self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
             self.set_status("ready", "Ready")
             
         
@@ -1150,7 +1169,7 @@ class SegmentationApp(ctk.CTk):
         else: # Save()
             # If working with a folder
             if self.list_images != None:
-                p = os.path.join(self.path_aux_save, os.path.basename(self.list_images[self.list_index]))
+                p = os.path.join(self.path_aux_save, os.path.splitext(os.path.basename(self.list_images[self.list_index]))[0]+".png")
             # Otherwise
             else:
                 p = os.path.splitext(self.path_original_image)[0] + "_mask.png"
@@ -1389,9 +1408,6 @@ class SegmentationApp(ctk.CTk):
 
         old_h = self.view_h
         old_w = self.view_w
-        # TODO update also self.view_x, self.view_y to focus the zoom
-        #self.view_h = int(min(self.canvas.winfo_height(), self.orig_h)/self.zoom)
-        #self.view_w = int(min(self.canvas.winfo_width(), self.orig_w)/self.zoom)
         self.view_h = int(self.canvas.winfo_height()/self.zoom)
         self.view_w = int(self.canvas.winfo_width()/self.zoom)
         

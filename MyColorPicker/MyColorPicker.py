@@ -190,7 +190,7 @@ class MyColorPicker(customtkinter.CTkToplevel):
             r = self.rgb_color[0]
             g = self.rgb_color[1]
             b = self.rgb_color[2]    
-            
+            self.rgb_color = [r, g, b]
             
         except AttributeError:
             self.rgb_color = self.default_rgb
