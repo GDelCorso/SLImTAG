@@ -685,17 +685,17 @@ class SegmentationApp(ctk.CTk):
         clear_btn.bind("<Enter>", lambda e: clear_btn.configure(fg_color="#CC0000", text_color="white"))
         clear_btn.bind("<Leave>", lambda e: clear_btn.configure(fg_color="transparent", text_color="red"))
         mask_frame.grid_columnconfigure(1, weight=1)
-        mask_frame.bind("<Button-1>", lambda e: self.change_mask(e, mid))
+        mask_frame.bind("<Button-1>", lambda e: self.change_mask(mid))
         mask_frame.bind("<Button-3>", lambda e: self.update_mask(e, mid))
-        mask_frame.crc.bind("<Button-1>", lambda e: self.change_mask(e, mid))
+        mask_frame.crc.bind("<Button-1>", lambda e: self.change_mask(mid))
         mask_frame.crc.bind("<Button-3>", lambda e: self.update_mask(e, mid))
-        mask_frame.lbl.bind("<Button-1>", lambda e: self.change_mask(e, mid))
+        mask_frame.lbl.bind("<Button-1>", lambda e: self.change_mask(mid))
         mask_frame.lbl.bind("<Button-3>", lambda e: self.update_mask(e, mid))
         if 1 <= mid <= 9:
-            self.bind(f"<Key-{mid}>", lambda e: self.change_mask(e, mid))
+            self.bind(f"<Key-{mid}>", lambda e: self.change_mask(mid))
         return mask_frame
 
-    def change_mask(self, e=None, target_id=None):
+    def change_mask(self, target_id=None):
         '''
         Changes the currently active mask based on the user selection in the 
         combo box.
@@ -713,12 +713,19 @@ class SegmentationApp(ctk.CTk):
         self.set_controls_state(True)
 
     def update_mask(self, e, target_id):
+        if hasattr(self, 'active_context_menu'):
+            self.context_menu.destroy()
+
         context_menu = tk.Menu(self, tearoff=0)
         context_menu.add_command(label="Rename", command=lambda: self.rename_mask(target_id))
         context_menu.add_command(label="Update Color", command=lambda: self.update_color_mask(target_id))
+        context_menu.add_command(label="Set Active", command=lambda: self.change_mask(target_id))
+        context_menu.add_command(label="Delete", command=lambda: self.clear_mask(target_id))
         context_menu.add_separator()
-        context_menu.add_command(label="Esci", command=lambda: context_menu.destroy())
+        context_menu.add_command(label="Quit menu", command=lambda: context_menu.destroy())
         context_menu.post(e.x_root, e.y_root)
+
+        self.active_context_menu = context_menu
 
     def rename_mask(self, target_id):
         self.deactivate_tools()
