@@ -155,7 +155,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [x] Add <kbd>Q</kbd> (or <kbd>Ctrl</kbd>+<kbd>Q</kbd>) as quit shortcut
 - [x] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 - [ ] "Unsaved changes" status does not look at the undo history ― if you open a mask, do something, then undo, the mask will still be considered "modified"
-- [ ] Bind Tab/Shift-Tab to cycle between masks
+- [x] Bind Tab/Shift-Tab to cycle between masks
 
 #### View
 

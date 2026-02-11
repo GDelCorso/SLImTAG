@@ -388,10 +388,16 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-q>", lambda e: self.quit_program())
         self.bind("<Control-Q>", lambda e: self.quit_program())
         
+        self.bind("<Tab>", lambda e: self.tab())
+        self.bind("<Shift-Tab>", lambda e: self.shiftTab())
+        # 4 linux
+        self.bind("<ISO_Left_Tab>", lambda e: self.shiftTab())
+        
         self.bind("<KeyPress-Shift_L>", lambda e: self.shiftPressed())
         self.bind("<KeyPress-Shift_R>", lambda e: self.shiftPressed())
         self.bind("<KeyRelease-Shift_L>", lambda e: self.shiftReleased())
         self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
+        
         
         # Next image
         #self.bind("<.>", lambda e: self.next_image())
@@ -402,6 +408,33 @@ class SegmentationApp(ctk.CTk):
         self.set_status("ready", "Ready")
         
         
+    def tab(self):
+        if len(self.mask_labels) == 0 or len(self.mask_labels) == 1 or self.active_mask_id is None: 
+            return
+
+        keys = list(self.mask_labels.keys())
+
+        if(self.active_mask_id == keys[-1]):
+            self.change_mask(keys[0])
+            return;
+
+        newIndex = keys.index(self.active_mask_id) + 1
+        self.change_mask(keys[newIndex])
+
+
+    def shiftTab(self):
+        if len(self.mask_labels) == 0 or len(self.mask_labels) == 1 or self.active_mask_id is None: 
+            return
+
+        keys = list(self.mask_labels.keys())
+
+        if(self.active_mask_id == keys[0]):
+            self.change_mask(keys[-1])
+            return;
+
+        newIndex = keys.index(self.active_mask_id) - 1
+        self.change_mask(keys[newIndex])
+
         
     #%% ASYNC METHOD FOR EFFICIENT SAM UPLOAD ---------------------------------
     def async_loader(self):
@@ -715,6 +748,8 @@ class SegmentationApp(ctk.CTk):
         # Updates the UI buttons’ colors
         self.update_button_colors()
         self.set_controls_state(True)
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+
 
     def update_mask(self, e, target_id):
         if hasattr(self, 'active_context_menu'):
@@ -1203,7 +1238,7 @@ class SegmentationApp(ctk.CTk):
     def on_canvas_mid_release(self, e):
         self.mid_pressed = False
         self._pan_start = None 
-        
+
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
         self._pan_start = None
@@ -1257,6 +1292,8 @@ class SegmentationApp(ctk.CTk):
         self.on_canvas_left_release(e)
 
     def on_canvas_drag(self, e):
+        if self.image_orig is None:
+            return
         '''
         Updates the brush continuously while dragging the mouse.
         Draws one circle per event, using add/subtract depending on Shift.
