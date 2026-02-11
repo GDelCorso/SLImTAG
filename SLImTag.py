@@ -409,31 +409,28 @@ class SegmentationApp(ctk.CTk):
         
         
     def tab(self):
-        if len(self.mask_labels) == 0 or len(self.mask_labels) == 1 or self.active_mask_id is None: 
-            return
-
-        keys = list(self.mask_labels.keys())
-
-        if(self.active_mask_id == keys[-1]):
-            self.change_mask(keys[0])
-            return;
-
-        newIndex = keys.index(self.active_mask_id) + 1
-        self.change_mask(keys[newIndex])
-
+        return self._tab(-1, 0, 1)
 
     def shiftTab(self):
-        if len(self.mask_labels) == 0 or len(self.mask_labels) == 1 or self.active_mask_id is None: 
+        return self._tab(0, -1, -1)
+
+    def _tab(self, id_key_to_check, id_key_to_get, increment):
+        if len(self.mask_labels) == 0: 
             return
 
         keys = list(self.mask_labels.keys())
 
-        if(self.active_mask_id == keys[0]):
-            self.change_mask(keys[-1])
+        if len(self.mask_labels) == 1: 
+            self.change_mask(keys[0])
+            return
+
+        if(self.active_mask_id == keys[id_key_to_check]):
+            self.change_mask(keys[id_key_to_get])
             return;
 
-        newIndex = keys.index(self.active_mask_id) - 1
+        newIndex = keys.index(self.active_mask_id) + increment
         self.change_mask(keys[newIndex])
+
 
         
     #%% ASYNC METHOD FOR EFFICIENT SAM UPLOAD ---------------------------------
