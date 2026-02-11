@@ -504,7 +504,7 @@ class SegmentationApp(ctk.CTk):
                                      buttons=[("Import image...", "import"), ("Cancel", None)])
             action = warn.return_value
             if action == "import":
-                self.load_image()
+                self.load_image(add_mask=False)
             else:
                 return False
         return True
@@ -861,7 +861,7 @@ class SegmentationApp(ctk.CTk):
 
 
     #%% IMAGE AND MASK --------------------------------------------------------
-    def load_image(self, path=None):
+    def load_image(self, path=None, add_mask=True):
         '''
         Load a .png or .jpg image and define and empty mask on it.
         '''
@@ -934,7 +934,8 @@ class SegmentationApp(ctk.CTk):
         self.view_w = self.canvas.winfo_width()#min(self.canvas.winfo_width(), self.orig_w)
         self.view_h = self.canvas.winfo_height()#min(self.canvas.winfo_height(), self.orig_h)
         
-        self.add_mask("mask_1")
+        if add_mask:
+            self.add_mask("mask_1")
         self.update_display()
         
         self.set_status("ready", "Ready")
