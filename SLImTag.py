@@ -167,7 +167,8 @@ class SegmentationApp(ctk.CTk):
         self.magic_mode = False
         self.cc_mode = False 
         self.smoothing_active = False
-        
+        self.mid_pressed = False
+
         # brush control
         self.last_brush_pos = None
         self.brush_size = 30
@@ -330,10 +331,13 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
         self.canvas.bind("<Motion>", self.draw_brush_preview)
         self.canvas.bind("<Button-1>", self.on_canvas_left)
+        self.canvas.bind("<Button-2>", self.on_canvas_mid)
         self.canvas.bind("<Button-3>", self.on_canvas_right)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<B2-Motion>", self.on_canvas_drag)
         self.canvas.bind("<B3-Motion>", self.on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
+        self.canvas.bind("<ButtonRelease-2>", self.on_canvas_mid_release)
         self.canvas.bind("<ButtonRelease-3>", self.on_canvas_right_release)
         
         # Zoom via keyboard (Ctrl + / Ctrl -)
@@ -1192,6 +1196,14 @@ class SegmentationApp(ctk.CTk):
             return
 
         
+    def on_canvas_mid(self, e):
+        self.mid_pressed = True
+        self._pan_start = (e.x, e.y, self.view_x, self.view_y)
+   
+    def on_canvas_mid_release(self, e):
+        self.mid_pressed = False
+        self._pan_start = None 
+        
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
         self._pan_start = None
@@ -1253,7 +1265,7 @@ class SegmentationApp(ctk.CTk):
         shift_pressed = (e.state & 0x0001) != 0 or self.b3_pressed
         
         # Move the canvas if not tools selected
-        if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active):
+        if not (self.brush_active or self.magic_mode or self.cc_mode or self.smoothing_active) or self.mid_pressed:
             
             if self._pan_start is not None:
                 x0, y0, ox0, oy0 = self._pan_start
