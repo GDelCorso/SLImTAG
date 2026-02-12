@@ -13,8 +13,6 @@ import time
 import shutil
 import sys # TODO usato solo per sys.path sotto
 
-sys.path.append('MyColorPicker') # TODO spostare colorpicker in utils
-
 # Numerical arrays manipulation
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion
@@ -27,11 +25,8 @@ import tkinter as tk
 from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
-# MyColorPicker GUI
-from MyColorPicker import ColorHelper, MyColorPicker # TODO spostare in utils
-
 # Custom utils
-from slimtag_utils import MultiButtonDialog, EntryDialog
+from slimtag_utils import MultiButtonDialog, EntryDialog, ColorHelper, MyColorPicker
 
 # Torch and SAM (Segment anything model)
 import torch
@@ -1543,9 +1538,9 @@ class SegmentationApp(ctk.CTk):
         xs = np.arange(x0, x1)
         
         # Efficient broadcasting to create circle mask
-        dy = ys[:, None] - y   # shape (height, 1)
-        dx = xs[None, :] - x   # shape (1, width)
-        circle = dx**2 + dy**2 <= r*r  # boolean array, shape (y1-y0, x1-x0)
+        dy = ys[:, None] - y  # shape (height, 1)
+        dx = xs[None, :] - x  # shape (1, width)
+        circle = dx**2 + dy**2 <= r*r + 4 # boolean array, shape (y1-y0, x1-x0)
         
         # Slice of the mask corresponding to the bounding box
         mask_area = self.mask_orig[y0:y1, x0:x1]
@@ -1562,6 +1557,7 @@ class SegmentationApp(ctk.CTk):
             erase_mask = circle & (mask_area == self.active_mask_id)
             mask_area[erase_mask] = 0
         
+        print(mask_area)
         # Mark mask as modified for later saving or GUI update
         self.set_modified(True)
 
