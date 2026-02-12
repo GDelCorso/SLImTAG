@@ -11,7 +11,6 @@ Giulio Del Corso, Oscar Papini & Federico Volpini
 import os
 import time
 import shutil
-import sys # TODO usato solo per sys.path sotto
 
 # Numerical arrays manipulation
 import numpy as np
