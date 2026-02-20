@@ -36,6 +36,7 @@ from slimtag_utils import MultiButtonDialog, EntryDialog
 # Torch and SAM (Segment anything model)
 import torch
 from segment_anything import sam_model_registry, SamPredictor
+print("TORCH, CUDA:",torch.cuda.is_available())
 
 # Asynchronous threading import
 import threading
@@ -444,6 +445,10 @@ class SegmentationApp(ctk.CTk):
             self.set_controls_state(True)
 
         self.status_sam_label.configure(text="")
+        
+        if self.list_images != None:
+            self.next_image_btn.configure(state="normal")
+            
         # Refresh and update display
         self.update_display()
         
@@ -1039,7 +1044,7 @@ class SegmentationApp(ctk.CTk):
         self.load_image(path=self.list_images[self.list_index])
         
         self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
-        self.next_image_btn.configure(state="normal")
+        self.next_image_btn.configure(state="disabled") # Originally disabled
         
         self.set_status("ready", "Ready")
         
@@ -1063,7 +1068,15 @@ class SegmentationApp(ctk.CTk):
             self.load_image(path=self.list_images[self.list_index])        
             
             self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
+            
+            self.next_image_btn.configure(state="disabled") # Disable next img
+            self.switch_computed_magic_wand = False # Disable MAGIC WAND
+            self.magic_btn.configure(state="disabled")
+            
             self.set_status("ready", "Ready")
+            
+            
+            
             
         
 
