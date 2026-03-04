@@ -25,7 +25,8 @@ from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog, EntryDialog, ColorHelper, MyColorPicker
+from slimtag_utils import MultiButtonDialog, EntryDialog, MyColorPicker
+from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
 # Torch and SAM (Segment anything model)
 import torch
@@ -786,12 +787,12 @@ class SegmentationApp(ctk.CTk):
     
     def update_color_mask(self, target_id): 
         self.deactivate_tools()
-        color = MyColorPicker(initial_color=ColorHelper.rgbToHEX(self.mask_colors[target_id])).get()
+        color = MyColorPicker(initial_color=rgb_to_hex(self.mask_colors[target_id])).get()
         if color == None:
             return  
         
         # Update Widget
-        self.mask_colors[target_id] = ColorHelper.hexToRGB(color)
+        self.mask_colors[target_id] = hex_to_rgb(color)
         self.mask_widgets[target_id].crc.configure(image=self._crc(target_id))
         self.update_display(update_all="Mask")
     

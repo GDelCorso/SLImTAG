@@ -2,10 +2,11 @@ import customtkinter as ctk
 import tkinter as tk
 
 from PIL import Image, ImageTk
-import sys
 import os
 import math
 import re
+
+from slimtag_color_utils import contrasting_color
 
 class MultiButtonDialog(ctk.CTkToplevel):
     """
@@ -178,42 +179,10 @@ class EntryDialog(ctk.CTkToplevel):
         y = py + (ph - h) // 2
         self.geometry(f"+{x}+{y}")
 
-class ColorHelper():
-    '''
-    calculates text color based on background one   
-    '''
-    def getTextColor(color, lightColor='#ffffff', darkColor='#000000'):
-        r = int(color[1:3], 16); # hexToR
-        g = int(color[3:5], 16); # hexToG
-        b = int(color[5:7], 16); # hexToB
-        uicolors = [r / 255, g / 255, b / 255];
-        c = list(map(ColorHelper._col, uicolors))
-        L = (0.2126 * c[0]) + (0.7152 * c[1]) + (0.0722 * c[2]);
-        if L > 0.179:
-            return darkColor
-        return lightColor
-
-    def _col(col):
-        if col <= 0.03928:
-            return col / 12.92
-        return pow((col + 0.055) / 1.055, 2.4)
-
-    def hexToRGB(h):
-        if len(h) != 7:
-            return h if h == '*' else ''
-        h = h.lstrip("#")
-        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-
-    def rgbToHEX(rgb):
-        if type(rgb) == str:
-            rgb = rgb[1:-1]
-            rgb = list(map(int,rgb.split(',')))
-
-        red, green, blue = rgb
-        return '#%02x%02x%02x' % (red, green, blue)
-
+# custom color picker with CTk flavor
+# adapted from https://github.com/Akascape/CTkColorPicker
+# with improvements of Federico Volpini
 class MyColorPicker(ctk.CTkToplevel):
-
     def __init__(self,
                  width: int = 300,
                  title: str = "Choose Color",
@@ -304,7 +273,7 @@ class MyColorPicker(ctk.CTkToplevel):
        
     def key_release(self, evt):
         if re.match(r"#[0-9a-fA-F]{6}", self.label.get()):
-            self.label.configure(fg_color=self.label.get(), border_color=self.label.get(), text_color=ColorHelper.getTextColor(self.label.get()))
+            self.label.configure(fg_color=self.label.get(), border_color=self.label.get(), text_color=contrasting_color(self.label.get()))
         
 
 
@@ -379,7 +348,7 @@ class MyColorPicker(ctk.CTkToplevel):
         
         self.update_value(self.label,str(self.default_hex_color))
         
-        self.label.configure(text_color=ColorHelper.getTextColor(self.label.get()), border_color=self.label.get())
+        self.label.configure(text_color=contrasting_color(self.label.get()), border_color=self.label.get())
         
             
     def projection_on_circle(self, point_x, point_y, circle_x, circle_y, radius):
@@ -416,7 +385,3 @@ class MyColorPicker(ctk.CTkToplevel):
         '''
         e.delete(0,ctk.END)
         e.insert(0,txt)
-
-if __name__ == "__main__":
-    app = MyColorPicker()
-    app.mainloop()
