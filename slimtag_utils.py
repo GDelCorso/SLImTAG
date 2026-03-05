@@ -182,23 +182,23 @@ class EntryDialog(ctk.CTkToplevel):
 # custom color picker with CTk flavor
 # adapted from https://github.com/Akascape/CTkColorPicker
 # with improvements of Federico Volpini
-class MyColorPicker(ctk.CTkToplevel):
+class ColorPicker(ctk.CTkToplevel):
     def __init__(self,
-                 width: int = 300,
-                 title: str = "Choose Color",
-                 initial_color: str = None,
-                 bg_color: str = None,
-                 fg_color: str = None,
-                 button_color: str = None,
-                 button_hover_color: str = None,
-                 text: str = "OK",
-                 corner_radius: int = 24,
-                 slider_border: int = 1,
-                 **button_kwargs):
+                 width: int = 300,                  # window width
+                 title: str = "Choose color",       # window title
+                 initial_color: str = None,         # initial color to be displayed
+                 bg_color: str = None,              # window bg color
+                 fg_color: str = None,              # window fg color
+                 button_color: str = None,          # confirm button & slider color
+                 button_hover_color: str = None,    # confirm button & slider color when hover
+                 text: str = "OK",                  # confirm button text
+                 corner_radius: int = None,         # radius of corners (slider handle, label & confirm button)
+                 slider_border: int = 1,            # dimension of slider border (higher values = thinner slider)
+                 **button_kwargs):                  # further kwargs for confirm button
     
         super().__init__()
         
-        PATH = "MyColorPickerResources"
+        PATH = "images/ColorPicker"
         self.title(title)
         WIDTH = width if width>=200 else 200
         HEIGHT = WIDTH + 150
@@ -215,26 +215,28 @@ class MyColorPicker(ctk.CTkToplevel):
         self.after(10)
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
         
-        self.default_hex_color = "#ffffff"  
+        self.default_hex_color = "#ffffff"
         self.default_rgb = [255, 255, 255]
         self.rgb_color = self.default_rgb[:]
         
         self.bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"]) if bg_color is None else bg_color
-        self.fg_color = self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]) if fg_color is None else fg_color
+        self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]) if fg_color is None else fg_color
         self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"]) if button_color is None else button_color
         self.button_hover_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["hover_color"]) if button_hover_color is None else button_hover_color
         self.button_text = text
         self.corner_radius = corner_radius
-        self.slider_border = 10 if slider_border>=10 else slider_border
+        self.slider_border = 10 if slider_border >= 10 else slider_border
         
         self.config(bg=self.bg_color)
         
-        self.frame = ctk.CTkFrame(master=self, fg_color=self.fg_color, bg_color=self.bg_color)
+        self.frame = ctk.CTkFrame(self, fg_color=self.fg_color, bg_color=self.bg_color)
         self.frame.grid(padx=20, pady=20, sticky="nswe")
           
         self.canvas = tk.Canvas(self.frame, height=self.image_dimension, width=self.image_dimension, highlightthickness=0, bg=self.fg_color)
         self.canvas.pack(pady=20)
+        self.canvas.bind("<Button-1>", self.on_mouse_drag)
         self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
+
 
         self.img1 = Image.open(os.path.join(PATH, 'color_wheel.png')).resize((self.image_dimension, self.image_dimension), Image.Resampling.LANCZOS)
         self.img2 = Image.open(os.path.join(PATH, 'target.png')).resize((self.target_dimension, self.target_dimension), Image.Resampling.LANCZOS)
@@ -248,12 +250,12 @@ class MyColorPicker(ctk.CTkToplevel):
         self.brightness_slider_value = ctk.IntVar()
         self.brightness_slider_value.set(255)
         
-        self.slider = ctk.CTkSlider(master=self.frame, height=20, border_width=self.slider_border,
-                                              button_length=15, progress_color=self.default_hex_color, from_=0, to=255,
-                                              variable=self.brightness_slider_value, number_of_steps=256,
-                                              button_corner_radius=self.corner_radius, corner_radius=self.corner_radius,
-                                              button_color=self.button_color, button_hover_color=self.button_hover_color,
-                                              command=lambda x:self.update_colors())
+        self.slider = ctk.CTkSlider(self.frame, height=20, border_width=self.slider_border,
+                                    button_length=15, progress_color=self.default_hex_color, from_=0, to=255,
+                                    variable=self.brightness_slider_value, number_of_steps=256,
+                                    button_corner_radius=self.corner_radius, corner_radius=self.corner_radius,
+                                    button_color=self.button_color, button_hover_color=self.button_hover_color,
+                                    command=lambda x:self.update_colors())
         self.slider.pack(fill="both", pady=(0,15), padx=20-self.slider_border)
 
         self.label = ctk.CTkEntry(master=self.frame, text_color="#000000", border_color="#ffffff", height=50, fg_color=self.default_hex_color, corner_radius=self.corner_radius, justify="center")
@@ -274,8 +276,6 @@ class MyColorPicker(ctk.CTkToplevel):
     def key_release(self, evt):
         if re.match(r"#[0-9a-fA-F]{6}", self.label.get()):
             self.label.configure(fg_color=self.label.get(), border_color=self.label.get(), text_color=contrasting_color(self.label.get()))
-        
-
 
     def get(self):
         self._color = self.label._fg_color
@@ -324,7 +324,7 @@ class MyColorPicker(ctk.CTkToplevel):
             
             r = self.rgb_color[0]
             g = self.rgb_color[1]
-            b = self.rgb_color[2]    
+            b = self.rgb_color[2]
             self.rgb_color = [r, g, b]
             
         except AttributeError:
