@@ -158,7 +158,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [ ] Convert hardcoded parameters to argparse arguments
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
-- [ ] Move color picker to utils (and cleanup its code)
+- [x] Move color picker to utils (and cleanup its code)
 
 #### UI
 
