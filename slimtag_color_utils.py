@@ -74,3 +74,111 @@ def rgb_to_hex(rgb):
     G = min(max(G, 0), 255)
     B = min(max(B, 0), 255)
     return f"#{R:02x}{G:02x}{B:02x}"
+
+def hsl_to_rgb(H, S, L):
+    '''
+    Given hue, saturation, lightness of a color, return the corresponding RGB
+    triplet.
+    
+    Units are: H in [0-360], S and L in [0-100]; return RGB are in [0-255].
+    '''
+    # normalize
+    h = H % 360
+    s = S / 100.0
+    l = L / 100.0
+    # compute chroma (=saturation modulated by lightness)
+    c = (1 - abs(2*l - 1)) * s
+    # chroma is highest channel value; computed second highest value
+    hp = h / 60
+    x = c * (1 - abs(hp%2 - 1))
+    # determine which channel gets which value depending on position on hue wheel
+    # we use table lookup
+    r, g, b = [(c, x, 0),
+               (x, c, 0),
+               (0, c, x),
+               (0, x, c),
+               (x, 0, c),
+               (c, 0, x)][int(hp)%6]
+    # compute shift and return
+    m = l - c/2
+    return tuple(min(max(round(255*(i + m)), 0), 255) for i in [r, g, b])
+
+def rgb_to_hsl(R, G, B):
+    '''
+    Given the three RGB of a color, return the corresponding HSL triplet.
+    
+    Units are: RGB are in [0-255]; return H in [0-360], S and L in [0-100].
+    S and L return floats with one decimal.
+    '''
+    # normalize
+    rgb = [R / 255.0, G / 255.0, B / 255.0]
+    # compute chroma
+    cmax = max(rgb)
+    cmin = min(rgb)
+    c = cmax - cmin
+    # compute lightness
+    l = (cmin + cmax) / 2
+    # compute saturation
+    s = 0 if c == 0 else c / (1 - abs(2*l - 1))
+    # compute hue
+    if c == 0:
+        h = 0
+    else:
+        i = rgb.index(cmax)
+        h = 60 * ((rgb[(i+1)%3] - rgb[(i-1)%3]) / c + 2*i)
+    # rescale and return
+    return (round(h)%360, round(s*100, 1), round(l*100, 1))
+
+def hsv_to_rgb(H, S, V):
+    '''
+    Given hue, saturation, value of a color, return the corresponding RGB
+    triplet.
+    
+    Units are: H in [0-360], S and V in [0-100]; return RGB are in [0-255].
+    '''
+    # normalize
+    h = H % 360
+    s = S / 100.0
+    v = V / 100.0
+    # compute chroma (=saturation modulated by value)
+    c = v * s
+    # chroma is highest channel value; computed second highest value
+    hp = h / 60
+    x = c * (1 - abs(hp%2 - 1))
+    # determine which channel gets which value depending on position on hue wheel
+    # we use table lookup
+    r, g, b = [(c, x, 0),
+               (x, c, 0),
+               (0, c, x),
+               (0, x, c),
+               (x, 0, c),
+               (c, 0, x)][int(hp)%6]
+    # compute shift and return
+    m = v - c
+    return tuple(min(max(round(255*(i + m)), 0), 255) for i in [r, g, b])
+
+def rgb_to_hsv(R, G, B):
+    '''
+    Given the three RGB of a color, return the corresponding HSV triplet.
+    
+    Units are: RGB are in [0-255]; return H in [0-360], S and V in [0-100].
+    S and V return floats with one decimal.
+    '''
+    # normalize
+    rgb = [R / 255.0, G / 255.0, B / 255.0]
+    # compute chroma
+    cmax = max(rgb)
+    cmin = min(rgb)
+    c = cmax - cmin
+    # compute value: it is just the max of channels
+    v = cmax
+    # compute saturation
+    s = 0 if cmax == 0 else c / cmax
+    # compute hue
+    if c == 0:
+        h = 0
+    else:
+        i = rgb.index(cmax)
+        h = 60 * ((rgb[(i+1)%3] - rgb[(i-1)%3]) / c + 2*i)
+    # rescale and return
+    return (round(h)%360, round(s*100, 1), round(v*100, 1))

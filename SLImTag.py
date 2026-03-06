@@ -25,13 +25,12 @@ from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog, EntryDialog, ColorPicker
+from slimtag_utils import MultiButtonDialog, EntryDialog, ColorPicker, MaskColorPicker
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
 # Torch and SAM (Segment anything model)
 import torch
 from segment_anything import sam_model_registry, SamPredictor
-print("TORCH, CUDA:",torch.cuda.is_available())
 
 # Asynchronous threading import
 import threading
@@ -787,7 +786,8 @@ class SegmentationApp(ctk.CTk):
     
     def update_color_mask(self, target_id): 
         self.deactivate_tools()
-        color = ColorPicker(initial_color=rgb_to_hex(self.mask_colors[target_id])).get()
+        #color = ColorPicker(initial_color=rgb_to_hex(self.mask_colors[target_id])).get()
+        color = MaskColorPicker(self, initial_color=rgb_to_hex(self.mask_colors[target_id]), mask_name=self.mask_labels[target_id]).get()
         if color == None:
             return  
         
@@ -1570,7 +1570,7 @@ class SegmentationApp(ctk.CTk):
             erase_mask = circle & (mask_area == self.active_mask_id)
             mask_area[erase_mask] = 0
         
-        print(mask_area)
+        #print(mask_area)
         # Mark mask as modified for later saving or GUI update
         self.set_modified(True)
 

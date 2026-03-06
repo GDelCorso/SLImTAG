@@ -1,12 +1,14 @@
 import customtkinter as ctk
 import tkinter as tk
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 import os
 import math
 import re
 
-from slimtag_color_utils import contrasting_color
+import numpy as np
+
+from slimtag_color_utils import rgb_to_hex, hex_to_rgb, rgb_to_hsv, hsv_to_rgb
 
 class MultiButtonDialog(ctk.CTkToplevel):
     """
@@ -181,207 +183,321 @@ class EntryDialog(ctk.CTkToplevel):
 
 # custom color picker with CTk flavor
 # adapted from https://github.com/Akascape/CTkColorPicker
-# with improvements of Federico Volpini
-class ColorPicker(ctk.CTkToplevel):
-    def __init__(self,
-                 width: int = 300,                  # window width
-                 title: str = "Choose color",       # window title
-                 initial_color: str = None,         # initial color to be displayed
-                 bg_color: str = None,              # window bg color
-                 fg_color: str = None,              # window fg color
-                 button_color: str = None,          # confirm button & slider color
-                 button_hover_color: str = None,    # confirm button & slider color when hover
-                 text: str = "OK",                  # confirm button text
-                 corner_radius: int = None,         # radius of corners (slider handle, label & confirm button)
-                 slider_border: int = 1,            # dimension of slider border (higher values = thinner slider)
-                 **button_kwargs):                  # further kwargs for confirm button
+# with improvements by Federico Volpini and Oscar Papini
+class MaskColorPicker(ctk.CTkToplevel):
+    """
+    Change mask color.
     
-        super().__init__()
+    Opens a new TopLevel window with a color selector. The .get() method
+    recovers the selected color, as a HEX string of the form '#RRGGBB'.
+    """
+    def __init__(self,
+                 parent,
+                 title: str = "Choose mask color",
+                 initial_color: str = None, # initial color to be displayed, in HEX '#RRGGBB'
+                 mask_name: str = "Color preview"
+                 ):
+        super().__init__(parent)
         
-        PATH = "images/ColorPicker"
+        self.parent = parent
+        # path for images
+        RESOURCES_PATH = "./images/ColorPicker"
+        
         self.title(title)
-        WIDTH = width if width>=200 else 200
-        HEIGHT = WIDTH + 150
-        self.image_dimension = self._apply_window_scaling(WIDTH - 100)
-        self.target_dimension = self._apply_window_scaling(20)
-        
+        # define geometry
+        WIDTH = 320
+        HEIGHT = WIDTH + 200
         self.maxsize(WIDTH, HEIGHT)
         self.minsize(WIDTH, HEIGHT)
         self.resizable(width=False, height=False)
-        self.transient(self.master)
+        
+        # dimension of color wheel canvas relative to window size
+        self.wheel_dim = self._apply_window_scaling(WIDTH - 50)
+        # dimension of inner SL canvas relative to wheel
+        # the original wheel has a dimension of 1000 px and the width of the annulus is 100 px
+        self.inner_dim = self._apply_window_scaling(int(self.wheel_dim * 0.8 / math.sqrt(2)))
+        # dimension of crosshair for color selection
+        self.target_dim = self._apply_window_scaling(21)
+        
+        # load images
+        self.wheel_img = Image.open(os.path.join(RESOURCES_PATH, 'hue_wheel.png')).resize((self.wheel_dim, self.wheel_dim), Image.Resampling.LANCZOS)
+        self.cross_img = Image.open(os.path.join(RESOURCES_PATH, 'crosshair.png')).resize((self.target_dim, self.target_dim), Image.Resampling.LANCZOS)
+
+        self.wheel = ImageTk.PhotoImage(self.wheel_img)
+        self.cross = ImageTk.PhotoImage(self.cross_img)
+        
+        # vectorized version of hsv_to_rgb (for numpy computation)
+        self.np_hsv_to_rgb = np.vectorize(hsv_to_rgb)
+        
+        # Put dialog on top of parent
+        self.transient(parent)
         self.lift()
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        self.after(10)
-        self.protocol("WM_DELETE_WINDOW", self._on_closing)
-        
-        self.default_hex_color = "#ffffff"
-        self.default_rgb = [255, 255, 255]
-        self.rgb_color = self.default_rgb[:]
-        
-        self.bg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"]) if bg_color is None else bg_color
-        self.fg_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]) if fg_color is None else fg_color
-        self.button_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"]) if button_color is None else button_color
-        self.button_hover_color = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["hover_color"]) if button_hover_color is None else button_hover_color
-        self.button_text = text
-        self.corner_radius = corner_radius
-        self.slider_border = 10 if slider_border >= 10 else slider_border
-        
-        self.config(bg=self.bg_color)
-        
-        self.frame = ctk.CTkFrame(self, fg_color=self.fg_color, bg_color=self.bg_color)
-        self.frame.grid(padx=20, pady=20, sticky="nswe")
-          
-        self.canvas = tk.Canvas(self.frame, height=self.image_dimension, width=self.image_dimension, highlightthickness=0, bg=self.fg_color)
-        self.canvas.pack(pady=20)
-        self.canvas.bind("<Button-1>", self.on_mouse_drag)
-        self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
-
-
-        self.img1 = Image.open(os.path.join(PATH, 'color_wheel.png')).resize((self.image_dimension, self.image_dimension), Image.Resampling.LANCZOS)
-        self.img2 = Image.open(os.path.join(PATH, 'target.png')).resize((self.target_dimension, self.target_dimension), Image.Resampling.LANCZOS)
-
-        self.wheel = ImageTk.PhotoImage(self.img1)
-        self.target = ImageTk.PhotoImage(self.img2)
-        
-        self.canvas.create_image(self.image_dimension/2, self.image_dimension/2, image=self.wheel)
-        self.set_initial_color(initial_color)
-        
-        self.brightness_slider_value = ctk.IntVar()
-        self.brightness_slider_value.set(255)
-        
-        self.slider = ctk.CTkSlider(self.frame, height=20, border_width=self.slider_border,
-                                    button_length=15, progress_color=self.default_hex_color, from_=0, to=255,
-                                    variable=self.brightness_slider_value, number_of_steps=256,
-                                    button_corner_radius=self.corner_radius, corner_radius=self.corner_radius,
-                                    button_color=self.button_color, button_hover_color=self.button_hover_color,
-                                    command=lambda x:self.update_colors())
-        self.slider.pack(fill="both", pady=(0,15), padx=20-self.slider_border)
-
-        self.label = ctk.CTkEntry(master=self.frame, text_color="#000000", border_color="#ffffff", height=50, fg_color=self.default_hex_color, corner_radius=self.corner_radius, justify="center")
-        
-        self.update_value(self.label, self.default_hex_color)
-        self.label.bind("<KeyRelease>", self.key_release)
-        
-        self.label.pack(fill="both", padx=10)
-        
-        self.button = ctk.CTkButton(master=self.frame, text=self.button_text, height=50, corner_radius=self.corner_radius, fg_color=self.button_color,
-                                              hover_color=self.button_hover_color, command=self._ok_event, **button_kwargs)
-        self.button.pack(fill="both", padx=10, pady=20)
-                
-        self.after(150, lambda: self.label.focus())
-                
+        # Grab events
         self.grab_set()
-       
-    def key_release(self, evt):
-        if re.match(r"#[0-9a-fA-F]{6}", self.label.get()):
-            self.label.configure(fg_color=self.label.get(), border_color=self.label.get(), text_color=contrasting_color(self.label.get()))
 
-    def get(self):
-        self._color = self.label._fg_color
-        self.master.wait_window(self)
-        return self._color
+        # configure geometry
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        
+        self.protocol("WM_DELETE_WINDOW", lambda: self._update_and_close(cancel=True))
+        
+        # PARAMETERS
+        self.return_color = None
+        self.current_color = (0, 0, 0) if initial_color is None else hex_to_rgb(initial_color)
+        self.mask_name = mask_name
+        
+        # WINDOW ELEMENTS
+        # frames
+        self.preview_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.preview_frame.grid(row=0, column=0, padx=20, pady=(10, 5), sticky="nsew")
+
+        self.color_frame = ctk.CTkFrame(self)
+        self.color_frame.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
+        
+        self.button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.button_frame.grid(row=2, column=0, padx=20, pady=(5, 10), sticky="nsew")
+        
+        # preview frame elements
+        self.preview_crc = ctk.CTkLabel(self.preview_frame, text="", image=self._make_circle(color=self.current_color))
+        self.preview_crc.grid(row=0, column=0, padx=(0, 5))
+        self.preview_lbl = ctk.CTkLabel(self.preview_frame, text=f"{self.mask_name}", anchor="w")
+        self.preview_lbl.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+        
+        # color frame elements
+        # canvas
+        canvas_bg = self._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["fg_color"]) # recover appropriate color to mimic transparency
+        self.color_canvas = ctk.CTkCanvas(self.color_frame, height=self.wheel_dim, width=self.wheel_dim, highlightthickness=0, bg=canvas_bg)
+        self.color_canvas.grid(row=0, column=0, columnspan=7, padx=5, pady=5, sticky="new")
+        
+        self.color_canvas.create_image(self.wheel_dim/2, self.wheel_dim/2, image=self.wheel)
+        self.inner_canvas = ctk.CTkCanvas(self.color_canvas, height=self.inner_dim, width=self.inner_dim, highlightthickness=0, bg=canvas_bg)
+        self.color_canvas.create_window(self.wheel_dim/2, self.wheel_dim/2, window=self.inner_canvas)
+        
+        # variable entries
+        self.color_vars = {"r": tk.StringVar(), "g": tk.StringVar(), "b": tk.StringVar(),
+                           "h": tk.StringVar(), "s": tk.StringVar(), "v": tk.StringVar(),
+                           "hex": tk.StringVar()
+                           }
+        self.current_color_vars = {k: "" for k in self.color_vars}
+        ctk.CTkLabel(self.color_frame, text="R", anchor="w").grid(row=1, column=0, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="G", anchor="w").grid(row=2, column=0, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="B", anchor="w").grid(row=3, column=0, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="[0-255]", anchor="w").grid(row=1, column=2, padx=(5, 15), sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="[0-255]", anchor="w").grid(row=2, column=2, padx=(5, 15), sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="[0-255]", anchor="w").grid(row=3, column=2, padx=(5, 15), sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="H", anchor="w").grid(row=1, column=3, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="S", anchor="w").grid(row=2, column=3, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="V", anchor="w").grid(row=3, column=3, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="°", anchor="w").grid(row=1, column=5, padx=(0, 5), sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="%", anchor="w").grid(row=2, column=5, padx=(0, 5), sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="%", anchor="w").grid(row=3, column=5, padx=(0, 5), sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="[0-360]", anchor="e").grid(row=1, column=6, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="[0-100]", anchor="e").grid(row=2, column=6, padx=5, sticky="ew")
+        ctk.CTkLabel(self.color_frame, text="[0-100]", anchor="e").grid(row=3, column=6, padx=5, sticky="ew")
+        hex_frame = ctk.CTkFrame(self.color_frame, fg_color="transparent")
+        hex_frame.grid(row=4, column=0, columnspan=7, padx=5, pady=(10, 5), sticky="nsew")
+        ctk.CTkLabel(hex_frame, text="Hex #", anchor="e").grid(row=0, column=0, sticky="ew")
+        self.color_entry = {}
+        self.color_entry["r"] = ctk.CTkEntry(self.color_frame, textvariable=self.color_vars["r"])
+        self.color_entry["r"].grid(row=1, column=1, sticky="ew")
+        self.color_entry["g"] = ctk.CTkEntry(self.color_frame, textvariable=self.color_vars["g"])
+        self.color_entry["g"].grid(row=2, column=1, sticky="ew")
+        self.color_entry["b"] = ctk.CTkEntry(self.color_frame, textvariable=self.color_vars["b"])
+        self.color_entry["b"].grid(row=3, column=1, sticky="ew")
+        self.color_entry["h"] = ctk.CTkEntry(self.color_frame, textvariable=self.color_vars["h"])
+        self.color_entry["h"].grid(row=1, column=4, sticky="ew")
+        self.color_entry["s"] = ctk.CTkEntry(self.color_frame, textvariable=self.color_vars["s"])
+        self.color_entry["s"].grid(row=2, column=4, sticky="ew")
+        self.color_entry["v"] = ctk.CTkEntry(self.color_frame, textvariable=self.color_vars["v"])
+        self.color_entry["v"].grid(row=3, column=4, sticky="ew")
+        self.color_entry["hex"] = ctk.CTkEntry(hex_frame, textvariable=self.color_vars["hex"])
+        self.color_entry["hex"].grid(row=0, column=1, sticky="ew")
+        for k in self.color_entry:
+            self.color_entry[k].bind("<KeyRelease>", lambda e, k=k: self.update_color_vars(e, keep=k))
+        
+        self.color_frame.grid_rowconfigure(0, weight=1)
+        self.color_frame.grid_columnconfigure([1, 4], weight=1)
+        hex_frame.grid_columnconfigure(1, weight=1)
+
+        # buttons frame elements
+        self.btn_ok = ctk.CTkButton(self.button_frame, text="OK", command=lambda: self._update_and_close(cancel=False))
+        self.btn_ok.grid(row=0, column=0, padx=(0, 5))
+        self.btn_cancel = ctk.CTkButton(self.button_frame, text="Cancel", command=lambda: self._update_and_close(cancel=True))
+        self.btn_cancel.grid(row=0, column=1, padx=(5, 0))
+        
+        self.button_frame.grid_columnconfigure([0, 1], weight=1)
+        
+        # bind <Enter> to OK from everywhere
+        self.bind("<Return>", lambda e: self.btn_ok.invoke())
+        # bind mouse events
+        self.color_canvas.bind("<Button-1>", self.on_mouse_wheel)
+        self.color_canvas.bind("<B1-Motion>", self.on_mouse_wheel)
+        self.inner_canvas.bind("<Button-1>", self.on_mouse_inner)
+        self.inner_canvas.bind("<B1-Motion>", self.on_mouse_inner)
+        
+        # AFTER DEFINITIONS OF GRAPHICAL ELEMENTS
+        # finish init cycle
+        self.update_color_vars()
+        self.update_inner_canvas()
+        self.color_entry["hex"].icursor("end")
+        self.after(150, lambda: self.color_entry["hex"].focus())
+        self.grab_set()
     
-    def _ok_event(self, event=None):
-        self._color = self.label._fg_color
-        self.grab_release()
-        self.destroy()
-        del self.img1
-        del self.img2
-        del self.wheel
-        del self.target
+    def _make_circle(self, color=(0, 0, 0), circle_size=21):
+        # aux function that draws a circle with specified color
+        color_circle = Image.new("RGBA", (circle_size+1, circle_size+1), (0, 0, 0, 0))
+        color_circle_draw = ImageDraw.Draw(color_circle)
+        color_circle_draw.ellipse((0, 0, circle_size, circle_size), fill=color)
+        return ctk.CTkImage(color_circle, size=(circle_size+1, circle_size+1))
+    
+    def _update_and_close(self, cancel=False):
+        """
+        Update the return color and close the window.
         
-    def _on_closing(self):
-        self._color = None
-        self.grab_release()
-        self.destroy()
-        del self.img1
-        del self.img2
-        del self.wheel
-        del self.target
-        
-    def on_mouse_drag(self, event):
-        x = event.x
-        y = event.y
-        self.canvas.delete("all")
-        self.canvas.create_image(self.image_dimension/2, self.image_dimension/2, image=self.wheel)
-        
-        d_from_center = math.sqrt(((self.image_dimension/2)-x)**2 + ((self.image_dimension/2)-y)**2)
-        
-        if d_from_center < self.image_dimension/2:
-            self.target_x, self.target_y = x, y
+        If cancel is True, the returned color is None; otherwise, the returned
+        color is self.current_color
+        """
+        if cancel:
+            self.return_color = None
         else:
-            self.target_x, self.target_y = self.projection_on_circle(x, y, self.image_dimension/2, self.image_dimension/2, self.image_dimension/2 -1)
-
-        self.canvas.create_image(self.target_x, self.target_y, image=self.target)
-        
-        self.get_target_color()
-        self.update_colors()
-  
-    def get_target_color(self):
-        try:
-            self.rgb_color = self.img1.getpixel((self.target_x, self.target_y))
-            
-            r = self.rgb_color[0]
-            g = self.rgb_color[1]
-            b = self.rgb_color[2]
-            self.rgb_color = [r, g, b]
-            
-        except AttributeError:
-            self.rgb_color = self.default_rgb
+            self.return_color = rgb_to_hex(self.current_color)
+        self.grab_release()
+        self.destroy()
+        # free resources
+        del self.wheel_img
+        del self.cross_img
+        del self.wheel
+        del self.cross
     
-    def update_colors(self):
-        brightness = self.brightness_slider_value.get()
-
-        self.get_target_color()
-
-        r = int(self.rgb_color[0] * (brightness/255))
-        g = int(self.rgb_color[1] * (brightness/255))
-        b = int(self.rgb_color[2] * (brightness/255))
-        
-        self.rgb_color = [r, g, b]
-
-        self.default_hex_color = "#{:02x}{:02x}{:02x}".format(*self.rgb_color)
-        
-        self.slider.configure(progress_color=self.default_hex_color)
-        self.label.configure(fg_color=self.default_hex_color, border_color=self.default_hex_color)
-        
-        self.update_value(self.label,str(self.default_hex_color))
-        
-        self.label.configure(text_color=contrasting_color(self.label.get()), border_color=self.label.get())
-        
-            
-    def projection_on_circle(self, point_x, point_y, circle_x, circle_y, radius):
-        angle = math.atan2(point_y - circle_y, point_x - circle_x)
-        projection_x = circle_x + radius * math.cos(angle)
-        projection_y = circle_y + radius * math.sin(angle)
-
-        return projection_x, projection_y
+    def get(self):
+        self.parent.wait_window(self)
+        return self.return_color
     
-    def set_initial_color(self, initial_color):
-        # set_initial_color is in beta stage, cannot seek all colors accurately
-        
-        if initial_color and initial_color.startswith("#"):
-            try:
-                r,g,b = tuple(int(initial_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-            except ValueError:
+    def update_color_vars(self, event=None, keep=None):
+        # keep may be one of "r", "g", "b", "h", "s", "v", "hex" or None
+        # if it is None, update all the variables based on self.current_color
+        # otherwise use the value of the variable that "keep" refers to (and the others of the same color space)
+        # to update the ones of the other color space
+        if keep is None:
+            self.color_vars["r"].set(str(self.current_color[0]))
+            self.color_vars["g"].set(str(self.current_color[1]))
+            self.color_vars["b"].set(str(self.current_color[2]))
+            hexstring = rgb_to_hex(self.current_color)
+            self.color_vars["hex"].set(hexstring[1:]) # remove '#'
+            hsv = rgb_to_hsv(*self.current_color)
+            self.color_vars["h"].set(str(hsv[0]))
+            self.color_vars["s"].set(str(hsv[1]))
+            self.color_vars["v"].set(str(hsv[2]))
+            for k in self.color_vars:
+                self.current_color_vars[k] = self.color_vars[k].get()
+        else:
+            if self.current_color_vars[keep] == self.color_vars[keep].get():
                 return
-            
-            self.default_hex_color = initial_color
-            for i in range(0, self.image_dimension):
-                for j in range(0, self.image_dimension):
-                    self.rgb_color = self.img1.getpixel((i, j))
-                    if (self.rgb_color[0], self.rgb_color[1], self.rgb_color[2])==(r,g,b):
-                        self.canvas.create_image(i, j, image=self.target)
-                        self.target_x = i
-                        self.target_y = j
-                        return
-                    
-        self.canvas.create_image(self.image_dimension/2, self.image_dimension/2, image=self.target)
+            if keep == "hex":
+                try:
+                    hexstring = self.color_vars["hex"].get()
+                    assert re.match(r"[0-9A-Fa-f]{6}", hexstring)
+                    r, g, b = hex_to_rgb("#"+hexstring)
+                    self.current_color = (r, g, b)
+                    self.color_vars["r"].set(str(r))
+                    self.color_vars["g"].set(str(g))
+                    self.color_vars["b"].set(str(b))
+                    hsv = rgb_to_hsv(r, g, b)
+                    self.color_vars["h"].set(str(hsv[0]))
+                    self.color_vars["s"].set(str(hsv[1]))
+                    self.color_vars["v"].set(str(hsv[2]))
+                except AssertionError:
+                    return
+            elif keep in ["r", "g", "b"]:
+                try:
+                    r = int(self.color_vars["r"].get())
+                    g = int(self.color_vars["g"].get())
+                    b = int(self.color_vars["b"].get())
+                    assert 0 <= r <= 255
+                    assert 0 <= g <= 255
+                    assert 0 <= b <= 255
+                    self.current_color = (r, g, b)
+                    hexstring = rgb_to_hex((r, g, b))
+                    self.color_vars["hex"].set(hexstring[1:]) # remove '#'
+                    hsv = rgb_to_hsv(r, g, b)
+                    self.color_vars["h"].set(str(hsv[0]))
+                    self.color_vars["s"].set(str(hsv[1]))
+                    self.color_vars["v"].set(str(hsv[2]))
+                except (ValueError, AssertionError):
+                    return
+            elif keep in ["h", "s", "v"]:
+                try:
+                    h = int(self.color_vars["h"].get()) % 360
+                    s = float(self.color_vars["s"].get())
+                    v = float(self.color_vars["v"].get())
+                    assert 0 <= s <= 100
+                    assert 0 <= v <= 100
+                    r, g, b = hsv_to_rgb(h, s, v)
+                    self.current_color = (r, g, b)
+                    hexstring = rgb_to_hex((r, g, b))
+                    self.color_vars["hex"].set(hexstring[1:]) # remove '#'
+                    self.color_vars["r"].set(str(r))
+                    self.color_vars["g"].set(str(g))
+                    self.color_vars["b"].set(str(b))
+                except (ValueError, AssertionError):
+                    return
+            else:
+                return
+        # finally update preview & update current
+        self.preview_crc.configure(image=self._make_circle(color=self.current_color))
+        for k in self.color_vars:
+            self.current_color_vars[k] = self.color_vars[k].get()
+        self.update_inner_canvas()
+        self.update_taget_h()
+        self.update_target_sv()
     
-    def update_value(self, e, txt):
-        '''
-        update a probability value in Textbox entry
-        '''
-        e.delete(0,ctk.END)
-        e.insert(0,txt)
+    def update_inner_canvas(self):
+        # create numpy array with S and V values depending on current H, and change inner canvas accordingly
+        self.inner_canvas.delete("inner")
+        h = int(self.color_vars["h"].get())
+        new_image = np.stack([h*np.ones((101, 101), dtype=int), *np.meshgrid(range(101), range(100, -1, -1))], axis=-1, dtype=int)
+        rgb_image = np.stack(self.np_hsv_to_rgb(new_image[..., 0], new_image[..., 1], new_image[..., 2]), axis=-1)
+        self.inner_img = Image.fromarray(rgb_image.astype(np.uint8)).resize((self.inner_dim, self.inner_dim), Image.Resampling.LANCZOS)
+        self.inner = ImageTk.PhotoImage(self.inner_img)
+        self.inner_canvas.create_image(self.inner_dim/2, self.inner_dim/2, image=self.inner, tag="inner")
+        self.inner_canvas.tag_raise("target_sv")
+    
+    def update_taget_h(self):
+        # uses self.current_color H value to compute line on hue wheel
+        h, _, _ = rgb_to_hsv(*self.current_color)
+        self.color_canvas.delete("target_h")
+        sn = math.sin(math.radians(h))
+        cs = math.cos(math.radians(h))
+        x0 = self.wheel_dim * (0.5 + 0.4 * cs)
+        y0 = self.wheel_dim * (0.5 - 0.4 * sn)
+        x1 = self.wheel_dim * (0.5 + 0.5 * cs)
+        y1 = self.wheel_dim * (0.5 - 0.5 * sn)
+        self.color_canvas.create_line(x0, y0, x1, y1, width=3, tag="target_h")
+    
+    def update_target_sv(self):
+        # uses self.current_color S and V values to compute target position on inner canvas
+        _, s, v = rgb_to_hsv(*self.current_color)
+        self.inner_canvas.delete("target_sv")
+        x = self.inner_dim * s / 100
+        y = self.inner_dim * (100 - v) / 100
+        self.inner_canvas.create_image(x, y, image=self.cross, tag="target_sv")
+    
+    def on_mouse_wheel(self, event):
+        # track mouse position, and update H of self.current_color
+        x, y = event.x, event.y
+        _, s, v = rgb_to_hsv(*self.current_color)
+        hrad = math.atan2(-(y-self.wheel_dim/2), x-self.wheel_dim/2)
+        h = int(math.degrees(hrad))
+        self.current_color = hsv_to_rgb(h, s, v)
+        self.update_color_vars()
+    
+    def on_mouse_inner(self, event):
+        # track mouse position, and update S and V of self.current_color
+        x, y = event.x, event.y
+        h, _, _ = rgb_to_hsv(*self.current_color)
+        srel = min(max(x / self.inner_dim, 0), 1)
+        vrel = min(max((self.inner_dim - y) / self.inner_dim, 0), 1)
+        s = round(100*srel, 1)
+        v = round(100*vrel, 1)
+        self.current_color = hsv_to_rgb(h, s, v)
+        self.update_color_vars()
