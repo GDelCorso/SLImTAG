@@ -91,15 +91,15 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 
 ### Import Images
 
-The first step is to load an image (in PNG or JPG) using `Image > Import image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut. Alternative, it is possible to choose `Image > Import folder` to load all PNG and JPG images of a folder; in this case, images are shown one at a time in alphabetical order, and a click on the `Next image` button (or the <kbd>.</kbd> shortcut) will advance to the next image. Moreover, current masks will _always_ be saved after a click on `Next image` or when the program is closed.
+The first step is to load an image (in PNG or JPG) using `Image > Import image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut. Alternatively, it is possible to choose `Image > Import folder` to load all PNG and JPG images of a folder; in this case, images are shown one at a time in alphabetical order, and a click on the `Next image` button (or the <kbd>.</kbd> shortcut) will advance to the next image. Moreover, current masks will _always_ be saved after a click on `Next image` or when the program is closed.
 
 ### Mask Actions
 
-Use the `Add new mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear i a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9. <kbd>Tab</kbd> (respectively <kbd>Shift</kbd>+<kbd>Tab</kbd>) cycles through the masks, selecting the next (respectively previous) one as active.
+Use the `Add new mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear in a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9. <kbd>Tab</kbd> (respectively <kbd>Shift</kbd>+<kbd>Tab</kbd>) cycles through the masks, selecting the next (respectively previous) one as active.
 
 Click on the small `×` button next to a mask to remove ALL the regions marked with it, and also remove the mask from the list. The active mask can be also removed via the menu `Mask > Clear active mask`. ALL masks can be removed via `Mask > Clear all masks`. **Any "clear mask" action cannot be undone.**
 
-Right-clicking on a mask opens a contextual menu with the options to rename the mask, change its color, delete it, or set it as the active mask.
+Right-clicking on a mask opens a contextual menu with the options to edit the mask (i.e., change its name and/or color), delete it, or set it as the active mask.
 
 `Mask > Save mask` (shortcut: <kbd>Ctrl</kbd>+<kbd>S</kbd>) saves the mask as an indexed PNG file with its default name and position:
 
