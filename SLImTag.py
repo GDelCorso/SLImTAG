@@ -267,12 +267,18 @@ class SegmentationApp(ctk.CTk):
         self.images_in_folder_frame = ctk.CTkFrame(self.right_panel)
         self.images_in_folder_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=(5, 10))
         self.images_in_folder_label = ctk.CTkLabel(self.images_in_folder_frame, textvariable=self.images_num_label_var)
-        self.images_in_folder_label.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        self.images_in_folder_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
+        # WHEN PREVIOUS IMAGE WILL BE IMPLEMENTED: UNCOMMENT THE FOLLOWING THREE LINES
+        # self.prev_image_btn = ctk.CTkButton(self.images_in_folder_frame, text="Previous image [,]", command=self.prev_image)
+        # self.prev_image_btn.grid(row=1, column=0, sticky="ew", padx=(10, 5), pady=(5, 10))
+        # self.prev_image_btn.configure(state="disabled")
         self.next_image_btn = ctk.CTkButton(self.images_in_folder_frame, text="Next image [.]", command=self.next_image)
-        self.next_image_btn.grid(row=1, column=0, sticky="ew", padx=10, pady=(5, 10))
+        # ALSO REMOVE FOLLOWING LINE AND UNCOMMENT LINE BELOW
+        self.next_image_btn.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 10))
+        # self.next_image_btn.grid(row=1, column=1, sticky="ew", padx=(5, 10), pady=(5, 10))
         self.next_image_btn.configure(state="disabled")
         
-        self.images_in_folder_frame.grid_columnconfigure(0, weight=1)
+        self.images_in_folder_frame.grid_columnconfigure([0, 1], weight=1)
         
         self.right_panel.grid_rowconfigure(1, weight=1)
 
