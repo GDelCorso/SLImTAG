@@ -25,7 +25,7 @@ from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog, EntryDialog, ColorPicker, MaskColorPicker
+from slimtag_utils import MultiButtonDialog, EntryDialog, MaskEditDialog
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
 # Torch and SAM (Segment anything model)
@@ -528,7 +528,7 @@ class SegmentationApp(ctk.CTk):
                                      buttons=[("Import image...", "import"), ("Cancel", None)])
             action = warn.return_value
             if action == "import":
-                self.load_image()
+                self.load_image(add_mask=False)
             else:
                 return False
         return True
@@ -686,16 +686,26 @@ class SegmentationApp(ctk.CTk):
         if len(self.mask_labels) >= MAX_MASKS:
             return
         
+        default_color = [c for c in HIGH_CONTRAST_COLORS if c not in self.mask_colors.values()][0] # get first non-used color
+        color = None
+        
         if name is None:
-        # Ask user for mask name
-            name_dialog = EntryDialog(self, message="New mask name:")
-            name = name_dialog.value
+            # Ask user for mask name
+            color_in_use = True
+            while color_in_use:
+                name, color = MaskEditDialog(self, title="New mask", initial_color=rgb_to_hex(default_color), mask_name="").get()
+                if color is not None and hex_to_rgb(color) in self.mask_colors.values():
+                    MultiButtonDialog(self, message=f"Color {color} already in use. Please choose another one.", buttons=(("OK", None),))
+                else:
+                    color_in_use = False
+
         if not name:  # User cancelled or empty
             return
+        color = default_color if not color else hex_to_rgb(color)
         
         mid = min([i+1 for i in range(MAX_MASKS) if i+1 not in self.mask_labels.keys()])
         self.mask_labels[mid] = name
-        self.mask_colors[mid] = HIGH_CONTRAST_COLORS[mid-1]
+        self.mask_colors[mid] = color#HIGH_CONTRAST_COLORS[mid-1]
         
         self.mask_widgets[mid] = self.create_mask_widget(mid)
         self.mask_widgets[mid].pack(fill="x", expand=True)
@@ -762,8 +772,7 @@ class SegmentationApp(ctk.CTk):
             self.active_context_menu.destroy()
 
         context_menu = tk.Menu(self, tearoff=0)
-        context_menu.add_command(label="Rename mask", command=lambda: self.rename_mask(target_id))
-        context_menu.add_command(label="Change mask color", command=lambda: self.update_color_mask(target_id))
+        context_menu.add_command(label="Edit mask", command=lambda: self.edit_mask(target_id))
         context_menu.add_command(label="Set as active mask", command=lambda: self.change_mask(target_id))
         context_menu.add_command(label="Delete mask", command=lambda: self.clear_mask(target_id))
         context_menu.add_separator()
@@ -771,29 +780,20 @@ class SegmentationApp(ctk.CTk):
         context_menu.post(e.x_root, e.y_root)
 
         self.active_context_menu = context_menu
-
-    def rename_mask(self, target_id):
-        self.deactivate_tools()
-        name_dialog = EntryDialog(self, message="New mask name:", value=self.mask_labels[target_id])
-        name = name_dialog.value
-        if not name:  # User cancelled or empty
-            return
-        
-        # Update Widget
-        self.mask_labels[target_id] = name 
-        self.mask_widgets[target_id].lbl.configure(text=f"{target_id}: {self.mask_labels[target_id]}")
-        self.update_display(update_all="Mask")
     
-    def update_color_mask(self, target_id): 
+    def edit_mask(self, target_id): 
         self.deactivate_tools()
         #color = ColorPicker(initial_color=rgb_to_hex(self.mask_colors[target_id])).get()
-        color = MaskColorPicker(self, initial_color=rgb_to_hex(self.mask_colors[target_id]), mask_name=self.mask_labels[target_id]).get()
-        if color == None:
-            return  
+        name, color = MaskEditDialog(self, initial_color=rgb_to_hex(self.mask_colors[target_id]), mask_name=self.mask_labels[target_id]).get()
+        print("name:", name)
         
         # Update Widget
-        self.mask_colors[target_id] = hex_to_rgb(color)
-        self.mask_widgets[target_id].crc.configure(image=self._crc(target_id))
+        if color is not None:
+            self.mask_colors[target_id] = hex_to_rgb(color)
+            self.mask_widgets[target_id].crc.configure(image=self._crc(target_id))
+        if name != "":
+            self.mask_labels[target_id] = name
+            self.mask_widgets[target_id].lbl.configure(text=f"{target_id}: {self.mask_labels[target_id]}")
         self.update_display(update_all="Mask")
     
     # CLEAR MASK --------------------------------------------------------------

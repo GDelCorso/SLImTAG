@@ -56,17 +56,24 @@ class MultiButtonDialog(ctk.CTkToplevel):
                 button_row[i].grid_columnconfigure((0,1,2), weight=1)
             else: # just last line, if it does NOT have three buttons
                 button_row[i].grid_columnconfigure((0,1,2), weight=0)
-            
+        
+        # Save buttons for reference
+        self.buttons = {}
         for i in range(n_buttons):
             text, value = buttons[i]
             btn = ctk.CTkButton(button_row[i//3], text=text, command=lambda v=value: self._on_button(v))
             btn.grid(row=0, column=i%3, sticky= "ew" if i//3 < n_btn_rows-1 else "", padx=5)
+            self.buttons[i] = btn
         
         self.grid_columnconfigure(0, weight=1)
         button_frame.grid_columnconfigure(0, weight=1)
 
         # Handle window close (X button)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        # If there is only one button, bind <Enter> to it
+        if n_buttons == 1:
+            self.bind("<Return>", lambda e: self.buttons[0].invoke())
 
         # Determine window size
         self.update_idletasks()
@@ -184,18 +191,18 @@ class EntryDialog(ctk.CTkToplevel):
 # custom color picker with CTk flavor
 # adapted from https://github.com/Akascape/CTkColorPicker
 # with improvements by Federico Volpini and Oscar Papini
-class MaskColorPicker(ctk.CTkToplevel):
+class MaskEditDialog(ctk.CTkToplevel):
     """
-    Change mask color.
+    Change mask color and name.
     
     Opens a new TopLevel window with a color selector. The .get() method
     recovers the selected color, as a HEX string of the form '#RRGGBB'.
     """
     def __init__(self,
                  parent,
-                 title: str = "Choose mask color",
+                 title: str = "Edit mask",
                  initial_color: str = None, # initial color to be displayed, in HEX '#RRGGBB'
-                 mask_name: str = "Color preview"
+                 mask_name: str = None # initial mask name
                  ):
         super().__init__(parent)
         
@@ -244,7 +251,8 @@ class MaskColorPicker(ctk.CTkToplevel):
         # PARAMETERS
         self.return_color = None
         self.current_color = (0, 0, 0) if initial_color is None else hex_to_rgb(initial_color)
-        self.mask_name = mask_name
+        self.mask_name = tk.StringVar()
+        self.mask_name.set(mask_name)
         
         # WINDOW ELEMENTS
         # frames
@@ -260,8 +268,10 @@ class MaskColorPicker(ctk.CTkToplevel):
         # preview frame elements
         self.preview_crc = ctk.CTkLabel(self.preview_frame, text="", image=self._make_circle(color=self.current_color))
         self.preview_crc.grid(row=0, column=0, padx=(0, 5))
-        self.preview_lbl = ctk.CTkLabel(self.preview_frame, text=f"{self.mask_name}", anchor="w")
-        self.preview_lbl.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+        self.name_entry = ctk.CTkEntry(self.preview_frame, textvariable=self.mask_name)
+        self.name_entry.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+        
+        self.preview_frame.grid_columnconfigure(1, weight=1)
         
         # color frame elements
         # canvas
@@ -339,8 +349,8 @@ class MaskColorPicker(ctk.CTkToplevel):
         # finish init cycle
         self.update_color_vars()
         self.update_inner_canvas()
-        self.color_entry["hex"].icursor("end")
-        self.after(150, lambda: self.color_entry["hex"].focus())
+        self.name_entry.icursor("end")
+        self.after(150, lambda: self.name_entry.focus())
         self.grab_set()
     
     def _make_circle(self, color=(0, 0, 0), circle_size=21):
@@ -359,6 +369,7 @@ class MaskColorPicker(ctk.CTkToplevel):
         """
         if cancel:
             self.return_color = None
+            self.mask_name.set("")
         else:
             self.return_color = rgb_to_hex(self.current_color)
         self.grab_release()
@@ -370,8 +381,11 @@ class MaskColorPicker(ctk.CTkToplevel):
         del self.cross
     
     def get(self):
+        """
+        Return tuple (new mask name, new mask color)
+        """
         self.parent.wait_window(self)
-        return self.return_color
+        return (self.mask_name.get(), self.return_color)
     
     def update_color_vars(self, event=None, keep=None):
         # keep may be one of "r", "g", "b", "h", "s", "v", "hex" or None
