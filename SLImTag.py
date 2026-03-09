@@ -784,8 +784,10 @@ class SegmentationApp(ctk.CTk):
     def edit_mask(self, target_id): 
         self.deactivate_tools()
         #color = ColorPicker(initial_color=rgb_to_hex(self.mask_colors[target_id])).get()
-        name, color = MaskEditDialog(self, initial_color=rgb_to_hex(self.mask_colors[target_id]), mask_name=self.mask_labels[target_id]).get()
-        print("name:", name)
+        name, color = MaskEditDialog(self,
+                                     initial_color=rgb_to_hex(self.mask_colors[target_id]),
+                                     mask_name=self.mask_labels[target_id]
+                                     ).get()
         
         # Update Widget
         if color is not None:
