@@ -159,6 +159,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
 - [x] Move color picker to utils (and cleanup its code)
+- [ ] When an image is loaded, add the file name to window title (e.g. "SLImTAG (model) - image_name.png", or "SLImTAG (model) [image_name.png]"). Maybe move model name to statusbar instead of window title?
 
 #### UI
 
@@ -180,6 +181,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [ ] Allow "Clean Mask" undo
 - [ ] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
 - [ ] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
+- [ ] TO CONSIDER: allow opening a mask without an underlying image for direct mask editing (maybe create a dummy black image with suitable size, to be discarded)
 
 #### Brush
 
