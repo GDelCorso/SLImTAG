@@ -109,7 +109,7 @@ ctk.set_default_color_theme("blue") # CTK color theme
 class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title(f"SLImTAG ({MODEL_TYPE})")
+        self.title("SLImTAG")
         self.geometry("1300x900")
 
         # STATE ---------------------------------------------------------------
@@ -239,18 +239,28 @@ class SegmentationApp(ctk.CTk):
         # Statusbar
         self.statusbar = ctk.CTkFrame(self, height=24, fg_color=("gray92", "gray14"))
         self.statusbar.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=0, pady=0)
+        
+        self.statusbar_left = ctk.CTkFrame(self.statusbar, fg_color=("gray92", "gray14"))
+        self.statusbar_left.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        self.statusbar_right = ctk.CTkFrame(self.statusbar, fg_color=("gray92", "gray14"))
+        self.statusbar_right.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
 
-        self.status_icon = ctk.CTkLabel(self.statusbar, text=STATUS_SYMBOL, text_color=STATUS_COLOR["idle"], width=14)
+        self.status_icon = ctk.CTkLabel(self.statusbar_left, text=STATUS_SYMBOL, text_color=STATUS_COLOR["idle"], width=14)
         self.status_icon.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(0, 2))
-        self.status_label = ctk.CTkLabel(self.statusbar, text="Initializing...")
+        self.status_label = ctk.CTkLabel(self.statusbar_left, text="Initializing...")
         self.status_label.grid(row=0, column=1, sticky="w", padx=(4, 0))
-        self.status_sam_label = ctk.CTkLabel(self.statusbar, text="") # for SAM asynchronous loading
+        self.status_sam_label = ctk.CTkLabel(self.statusbar_left, text="") # for SAM asynchronous loading
         self.status_sam_label.grid(row=0, column=2, sticky="w", padx=(4, 0))
         
-        self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
-        self.zoom_label.grid(row=0, column=4, sticky="e", padx=10)
+        self.status_model_label = ctk.CTkLabel(self.statusbar_right, text=f"SAM model: {MODEL_TYPE}")
+        self.status_model_label.grid(row=0, column=0, sticky="w")
         
-        self.statusbar.grid_columnconfigure(3, weight=1)
+        self.zoom_label = ctk.CTkLabel(self.statusbar_right, textvariable=self.zoom_label_var)
+        self.zoom_label.grid(row=0, column=2, sticky="e", padx=10)
+        
+        self.statusbar.grid_columnconfigure([0, 1], weight=1, uniform="equal")
+        self.statusbar_left.grid_columnconfigure(2, weight=1)
+        self.statusbar_right.grid_columnconfigure(1, weight=1)
         
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -455,6 +465,10 @@ class SegmentationApp(ctk.CTk):
         
         
     #%% AUX METHODS  ----------------------------------------------------------
+    def update_title(self):
+        title_string = f"{'*' if self.modified else ''}SLImTAG{f' [{os.path.basename(self.path_original_image)}]' if self.path_original_image is not None else ''}"
+        self.title(title_string)
+    
     def update_display(self, update_all="Global"):
         '''
         Aux method to update display whenever a change occurs.
@@ -565,13 +579,14 @@ class SegmentationApp(ctk.CTk):
         Check if self.modified is different than state, and in that case update
         """
         if self.modified != state:
-            title = self.title()
+            #title = self.title()
             if state == True:
                 self.modified = True
-                self.title("*"+title)
+                #self.title("*"+title)
             else: # state == False
                 self.modified = False
-                self.title(title[1:]) # remove '*'
+                #self.title(title[1:]) # remove '*'
+            self.update_title()
 
     def shiftPressed(self):
         # in case brush is active, set preview to "dashed"
@@ -947,9 +962,10 @@ class SegmentationApp(ctk.CTk):
             if not p:
                 return
             
-            self.path_original_image = p
         else:
             p = path
+        
+        self.path_original_image = p
 
         self.set_status("loading", "Loading image...")
         img = Image.open(p).convert("RGB")
@@ -957,6 +973,7 @@ class SegmentationApp(ctk.CTk):
         self.image_orig = img
         self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
         
+        self.update_title()
         # Async load of the SAM model to avoid freezed interface
         if self.thread is None or not self.thread.is_alive():
                self.thread = threading.Thread(target=self.async_loader, daemon=True)
