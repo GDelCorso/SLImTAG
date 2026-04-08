@@ -159,7 +159,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
 - [x] Move color picker to utils (and cleanup its code)
-- [ ] When an image is loaded, add the file name to window title (e.g. "SLImTAG (model) - image_name.png", or "SLImTAG (model) [image_name.png]"). Maybe move model name to statusbar instead of window title?
+- [x] When an image is loaded, add the file name to window title (e.g. "SLImTAG (model) - image_name.png", or "SLImTAG (model) [image_name.png]"). Maybe move model name to statusbar instead of window title?
 
 #### UI
 
