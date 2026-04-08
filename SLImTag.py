@@ -76,6 +76,15 @@ MAGIC_ON_COLOR = "#FF9800"   # orange
 CC_ON_COLOR = "#9C27B0"      # purple
 SMOOTH_ON_COLOR = "#2196F3"  # blue
 
+# colors for tools panel (light, dark)
+# obtained from color above by overlaying the standard background with the color above at 15% alpha
+TOOL_PANEL_COLOR = {
+    "brush": ("#C5D4C6", "#303F31"),
+    "wand": ("#E0D0BA", "#4B3B25"),
+    "ccomp": ("#D1BFD4", "#3C2A3F"),
+    "smooth": ("#BED0DE", "#293B49")
+    }
+
 STATUS_SYMBOL = "●"
 STATUS_COLOR = {
     "ready":  ("#2ECC71", "#2ECC71"),  # green
@@ -112,7 +121,7 @@ class SegmentationApp(ctk.CTk):
         self.title("SLImTAG")
         self.geometry("1300x900")
 
-        # STATE ---------------------------------------------------------------
+        #%% STATE ---------------------------------------------------------------
         # Full image and mask
         self.image_orig = None
         self.mask_orig = None
@@ -189,7 +198,7 @@ class SegmentationApp(ctk.CTk):
         self.b3_pressed = False
         self.mid_pressed = False
 
-        # UI ------------------------------------------------------------------
+        #%% UI ------------------------------------------------------------------
         
         # Top Menu
         self.menu_bar = tk.Menu(self)
@@ -265,7 +274,7 @@ class SegmentationApp(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         
-        # Mask controls
+        #%% Mask controls
         # Add mask button
         ctk.CTkButton(self.right_panel, text="Add new mask [N]", command=self.add_mask).grid(row=0, column=0, sticky="ew", padx=10, pady=(10,5))
         
@@ -292,22 +301,40 @@ class SegmentationApp(ctk.CTk):
         
         self.right_panel.grid_rowconfigure(1, weight=1)
 
-        # Tool buttons
+        #%% Tool buttons
         # Frame for buttons
         self.tools_btn_frame = ctk.CTkFrame(self.left_panel)
         self.tools_btn_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 5))
         # Frame for tool options
-        self.tool_opt_frame = ctk.CTkFrame(self.left_panel)
-        self.tool_opt_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.tool_opt_frame = {}
         
+        empty_frame = ctk.CTkFrame(self.left_panel)
+        empty_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.tool_opt_frame["empty"] = empty_frame
+        
+        brush_frame = ctk.CTkFrame(self.left_panel, fg_color=TOOL_PANEL_COLOR["brush"])
+        brush_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.tool_opt_frame["brush"] = brush_frame
+        
+        wand_frame = ctk.CTkFrame(self.left_panel, fg_color=TOOL_PANEL_COLOR["wand"])
+        wand_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.tool_opt_frame["wand"] = wand_frame
+        
+        ccomp_frame = ctk.CTkFrame(self.left_panel, fg_color=TOOL_PANEL_COLOR["ccomp"])
+        ccomp_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.tool_opt_frame["ccomp"] = ccomp_frame
+        
+        smooth_frame = ctk.CTkFrame(self.left_panel, fg_color=TOOL_PANEL_COLOR["smooth"])
+        smooth_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.tool_opt_frame["smooth"] = smooth_frame
+        
+        # set empty frame at start
+        self.current_tool_frame = None
+        self.show_tool_frame("empty")
+        
+        # buttons
         self.brush_btn = ctk.CTkButton(self.tools_btn_frame, text="Brush [B]", command=self.toggle_brush)
-        self.brush_btn.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
-        
-        ctk.CTkLabel(self.tool_opt_frame, text="Brush size", font=ctk.CTkFont(size=11), fg_color="transparent", anchor="w").grid(row=0, column=0, sticky="ew", padx=10, pady=(8,2))
-        self.brush_slider = ctk.CTkSlider(self.tool_opt_frame, from_=5, to=100, command=lambda v: setattr(self,"brush_size",int(v)))
-        self.brush_slider.set(self.brush_size)
-        self.brush_slider.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 8))
-        
+        self.brush_btn.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))        
 
         self.magic_btn = ctk.CTkButton(self.tools_btn_frame, text="Magic wand [M]", command=self.toggle_magic)
         self.magic_btn.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
@@ -318,8 +345,16 @@ class SegmentationApp(ctk.CTk):
         self.cc_btn = ctk.CTkButton(self.tools_btn_frame, text="Connected component [C]", command=self.toggle_cc_mode)
         self.cc_btn.grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
         
+        # Brush options
+        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush size", font=ctk.CTkFont(size=11), fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=10, pady=(8,2))
+        self.brush_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=5, to=100, command=lambda v: setattr(self,"brush_size",int(v)))
+        self.brush_slider.set(self.brush_size)
+        self.brush_slider.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 8))
+        
+        # Grid configurations for left panel frames
         self.tools_btn_frame.grid_columnconfigure(0, weight=1)
-        self.tool_opt_frame.grid_columnconfigure(0, weight=1)
+        for tool in self.tool_opt_frame:
+            self.tool_opt_frame[tool].grid_columnconfigure(0, weight=1)
         
         # Buttons configuration
         self.brush_btn.configure(fg_color=TOOL_OFF_COLOR)
@@ -336,7 +371,7 @@ class SegmentationApp(ctk.CTk):
 
         self.left_panel.grid_rowconfigure(1, weight=1)
 
-        # SAM -----------------------------------------------------------------
+        #%% SAM -----------------------------------------------------------------
         device = "cuda" if torch.cuda.is_available() else "cpu"
         sam = sam_model_registry[MODEL_TYPE](checkpoint=MODEL_WEIGHTS_PATH)
         sam.to(device).eval()
@@ -349,7 +384,7 @@ class SegmentationApp(ctk.CTk):
         
         self.set_controls_state(False) # Deactivate all buttons -- must be done after defining switch_computed_magic_wand
 
-        # BINDINGS ------------------------------------------------------------
+        #%% BINDINGS ------------------------------------------------------------
         self.canvas.bind("<MouseWheel>", self.zoom_evt)
         self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
         self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
@@ -469,6 +504,11 @@ class SegmentationApp(ctk.CTk):
         title_string = f"{'*' if self.modified else ''}SLImTAG{f' [{os.path.basename(self.path_original_image)}]' if self.path_original_image is not None else ''}"
         self.title(title_string)
     
+    def show_tool_frame(self, tool):
+        frame = self.tool_opt_frame[tool]
+        self.current_tool_frame = frame
+        frame.tkraise()
+    
     def update_display(self, update_all="Global"):
         '''
         Aux method to update display whenever a change occurs.
@@ -536,6 +576,7 @@ class SegmentationApp(ctk.CTk):
         self.cc_mode = False
         self.smoothing_active = False
         self.update_button_colors()
+        self.show_tool_frame("empty")
         
         
     def image_is_loaded(self):
@@ -872,8 +913,10 @@ class SegmentationApp(ctk.CTk):
             if not self.brush_active:
                 self.deactivate_tools()
                 self.brush_active = True
+                self.show_tool_frame("brush")
             else:
                 self.brush_active = False
+                self.show_tool_frame("empty")
             self.update_button_colors()
 
         self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
@@ -890,8 +933,10 @@ class SegmentationApp(ctk.CTk):
             if not self.cc_mode:
                 self.deactivate_tools()
                 self.cc_mode = True
+                self.show_tool_frame("ccomp")
             else:
                 self.cc_mode = False
+                self.show_tool_frame("empty")
             self.update_button_colors()
 
 
@@ -907,8 +952,10 @@ class SegmentationApp(ctk.CTk):
             if not self.magic_mode and self.switch_computed_magic_wand:
                 self.deactivate_tools()
                 self.magic_mode = True
+                self.show_tool_frame("wand")
             else:
                 self.magic_mode = False
+                self.show_tool_frame("empty")
             self.update_button_colors()
 
     def toggle_smoothing(self):
@@ -923,8 +970,10 @@ class SegmentationApp(ctk.CTk):
             if not self.smoothing_active:
                 self.deactivate_tools()
                 self.smoothing_active = True
+                self.show_tool_frame("smooth")
             else:
                 self.smoothing_active = False
+                self.show_tool_frame("empty")
             self.update_button_colors()
 
 
