@@ -346,10 +346,13 @@ class SegmentationApp(ctk.CTk):
         self.cc_btn.grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
         
         # Brush options
-        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush size", font=ctk.CTkFont(size=11), fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=10, pady=(8,2))
-        self.brush_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=5, to=100, command=lambda v: setattr(self,"brush_size",int(v)))
+        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush size", fg_color="transparent", anchor="w").grid(row=0, column=0, sticky="ew", padx=(10, 5), pady=(8,2)) #font=ctk.CTkFont(size=11),
+        self.brush_size_lbl = ctk.CTkLabel(self.tool_opt_frame["brush"], text=str(self.brush_size), fg_color="transparent", anchor="e")
+        self.brush_size_lbl.grid(row=0, column=1, sticky="ew", padx=(5, 10), pady=(8,2))
+        self.brush_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=5, to=100,
+                                          command=lambda v: (setattr(self,"brush_size",int(v)), self.brush_size_lbl.configure(text=str(self.brush_size))))
         self.brush_slider.set(self.brush_size)
-        self.brush_slider.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 8))
+        self.brush_slider.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 8))
         
         # Grid configurations for left panel frames
         self.tools_btn_frame.grid_columnconfigure(0, weight=1)
