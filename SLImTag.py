@@ -79,11 +79,25 @@ SMOOTH_ON_COLOR = "#2196F3"  # blue
 # colors for tools panel (light, dark)
 # obtained from color above by overlaying the standard background with the color above at 15% alpha
 TOOL_PANEL_COLOR = {
-    "brush": ("#C5D4C6", "#303F31"),
-    "wand": ("#E0D0BA", "#4B3B25"),
-    "ccomp": ("#D1BFD4", "#3C2A3F"),
+    "brush":  ("#C5D4C6", "#303F31"),
+    "wand":   ("#E0D0BA", "#4B3B25"),
+    "ccomp":  ("#D1BFD4", "#3C2A3F"),
     "smooth": ("#BED0DE", "#293B49")
     }
+# as above, but with color at 5% alpha
+TOOL_PANEL_SUBCOLOR = {
+    "brush":  ("#D3D8D4", "#2C312D"),
+    "wand":   ("#DDD7D0", "#363029"),
+    "ccomp":  ("#D7D1D9", "#302A32"),
+    "smooth": ("#D2D8DD", "#2A3035")
+    }
+# color at 10% alpha, if needed
+# TOOL_PANEL_SUBCOLOR = {
+#     "brush":  ("#CDD7CE", "#2E382F"),
+#     "wand":   ("#DFD4C5", "#413627"),
+#     "ccomp":  ("#D4C8D7", "#362A39"),
+#     "smooth": ("#C8D4DD", "#2A363F")
+#     }
 
 STATUS_SYMBOL = "●"
 STATUS_COLOR = {
@@ -193,6 +207,11 @@ class SegmentationApp(ctk.CTk):
         # SAM management
         self.sam_points = []
         self.sam_pt_labels = []
+        
+        # SAM preprocessing (for sliders: range -100..100)
+        self.wand_brightness = 0
+        self.wand_contrast = 0
+        self.wand_gamma = 0
 
         # boolean to track if mouse buttons are pressed
         self.b3_pressed = False
@@ -353,6 +372,27 @@ class SegmentationApp(ctk.CTk):
                                           command=lambda v: (setattr(self,"brush_size",int(v)), self.brush_size_lbl.configure(text=str(self.brush_size))))
         self.brush_slider.set(self.brush_size)
         self.brush_slider.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 8))
+        
+        # Magic wand options
+        self.wand_adj_frame = ctk.CTkFrame(self.tool_opt_frame["wand"], fg_color=TOOL_PANEL_SUBCOLOR["wand"])
+        self.wand_adj_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        ctk.CTkLabel(self.wand_adj_frame, text="Preprocessing", fg_color="transparent", font=ctk.CTkFont(weight='bold')).grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(3,0))
+        ctk.CTkLabel(self.wand_adj_frame, text="Brightness", fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=(10,0), pady=(3,0))
+        self.wand_brightness_lbl = ctk.CTkLabel(self.wand_adj_frame, text=str(self.wand_brightness), fg_color="transparent", anchor="e")
+        self.wand_brightness_lbl.grid(row=1, column=1, sticky="ew", padx=(0,10), pady=(3,0))
+        ctk.CTkLabel(self.wand_adj_frame, text="Contrast", fg_color="transparent", anchor="w").grid(row=2, column=0, sticky="ew", padx=(10,0), pady=(3,0))
+        self.wand_contrast_lbl = ctk.CTkLabel(self.wand_adj_frame, text=str(self.wand_contrast), fg_color="transparent", anchor="e")
+        self.wand_contrast_lbl.grid(row=2, column=1, sticky="ew", padx=(0,10), pady=(3,0))
+        ctk.CTkLabel(self.wand_adj_frame, text="Shadows", fg_color="transparent", anchor="w").grid(row=3, column=0, sticky="ew", padx=(10,0), pady=(3,0))
+        self.wand_gamma_lbl = ctk.CTkLabel(self.wand_adj_frame, text=str(self.wand_gamma), fg_color="transparent", anchor="e")
+        self.wand_gamma_lbl.grid(row=3, column=1, sticky="ew", padx=(0,10), pady=(3,0))
+        self.wand_auto_update = ctk.CTkButton(self.wand_adj_frame, text="Auto update", command=None)
+        self.wand_auto_update.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(3,5))
+        self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual update", command=None)
+        self.wand_manual_update.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,10))
+        
+        self.wand_adj_frame.grid_columnconfigure(0, weight=1)
+        
         
         # Grid configurations for left panel frames
         self.tools_btn_frame.grid_columnconfigure(0, weight=1)
