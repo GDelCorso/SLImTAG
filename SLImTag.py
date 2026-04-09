@@ -26,7 +26,7 @@ from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog, MaskEditDialog#, EntryDialog
+from slimtag_utils import MultiButtonDialog, MaskEditDialog, PreprocessingAdjustments, adjust_image#, EntryDialog
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
 # Torch and SAM (Segment anything model)
@@ -407,7 +407,7 @@ class SegmentationApp(ctk.CTk):
         self.wand_auto_update = ctk.CTkButton(self.wand_adj_frame, text="Auto update", command=None)
         self.wand_auto_update.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(3,5))
         self.wand_auto_update.configure(state='disabled') # TODO implement auto update
-        self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual update", command=None)
+        self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual update", command=self.manual_wand_preprocessing)
         self.wand_manual_update.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,10))
         
         self.wand_adj_frame.grid_columnconfigure(0, weight=1)
@@ -547,13 +547,21 @@ class SegmentationApp(ctk.CTk):
         #  Thread-safe upload of shared variable
         with self.lock:
             self.switch_computed_magic_wand = False
+            
+            if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
+                self.set_controls_state(False)
+            else:
+                self.set_controls_state(True)
+            
             # SAM model inference on image
-            self.sam.set_image(np.array(self.image_orig))
+            image = adjust_image(np.array(self.image_orig), self.wand_brightness, self.wand_contrast, self.wand_gamma)
+            self.sam.set_image(image)
             
             # Turn on switch
             self.switch_computed_magic_wand = True
             
         #print("Loaded SAM model")
+
         if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
             self.set_controls_state(False)
         else:
@@ -568,7 +576,6 @@ class SegmentationApp(ctk.CTk):
         self.update_display()
         
         
-        
     #%% AUX METHODS  ----------------------------------------------------------
     def update_title(self):
         title_string = f"{'*' if self.modified else ''}SLImTAG{f' [{os.path.basename(self.path_original_image)}]' if self.path_original_image is not None else ''}"
@@ -578,6 +585,20 @@ class SegmentationApp(ctk.CTk):
         frame = self.tool_opt_frame[tool]
         self.current_tool_frame = frame
         frame.tkraise()
+    
+    def manual_wand_preprocessing(self):
+        values = PreprocessingAdjustments(self).values
+        if values is not None:
+            self.wand_brightness, self.wand_contrast, self.wand_gamma = values
+            self.wand_brightness_lbl.configure(text=str(self.wand_brightness))
+            self.wand_contrast_lbl.configure(text=str(self.wand_contrast))
+            self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
+            # reload SAM image
+            # deactivate tools
+            self.deactivate_tools()
+            if self.thread is None or not self.thread.is_alive():
+                self.thread = threading.Thread(target=self.async_loader, daemon=True)
+                self.thread.start()
     
     def update_display(self, update_all="Global"):
         '''
@@ -1095,8 +1116,8 @@ class SegmentationApp(ctk.CTk):
         self.update_title()
         # Async load of the SAM model to avoid freezed interface
         if self.thread is None or not self.thread.is_alive():
-               self.thread = threading.Thread(target=self.async_loader, daemon=True)
-               self.thread.start()
+            self.thread = threading.Thread(target=self.async_loader, daemon=True)
+            self.thread.start()
         
         # reset masks
         self.clear_all_masks()

@@ -515,3 +515,161 @@ class MaskEditDialog(ctk.CTkToplevel):
         v = round(100*vrel, 1)
         self.current_color = hsv_to_rgb(h, s, v)
         self.update_color_vars()
+
+class PreprocessingAdjustments(ctk.CTkToplevel):
+    """
+    Allows adjustments of preprocessing parameters.
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        
+        self.title("SLImTAG")
+        self.resizable(False, False)
+        
+        self.canvas_size = 500
+        
+        # return values
+        # if not None, this is a triple (brightness, contrast, shadows) with integers in -100 .. 100
+        self.values = None
+        
+        # parameters
+        self.brightness = parent.wand_brightness
+        self.contrast = parent.wand_contrast
+        self.shadows = parent.wand_gamma
+        
+        # UI
+        # canvas
+        self.preview_canvas = ctk.CTkCanvas(self, width=self.canvas_size, height=self.canvas_size)
+        self.preview_canvas.grid(row=0, column=0, sticky="nsew")
+        
+        scale = max(parent.orig_w, parent.orig_h) / 400
+        self.image = parent.image_orig.resize((int(parent.orig_w / scale), int(parent.orig_h / scale)), Image.Resampling.LANCZOS)
+        self.update_display()
+        
+        # control panel
+        self.panel = ctk.CTkFrame(self, fg_color="transparent")
+        self.panel.grid(row=0, column=1, sticky="nsew")
+        
+        # sliders
+        self.slider_lbl = {}
+        
+        ctk.CTkLabel(self.panel, text="Brightness", fg_color="transparent", anchor="w").grid(row=0, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.slider_lbl["brightness"] = ctk.CTkLabel(self.panel, text=str(self.brightness), fg_color="transparent", anchor="e")
+        self.slider_lbl["brightness"].grid(row=0, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.brightness_slider = ctk.CTkSlider(self.panel, from_=-100, to=100, command=lambda v: self.slider_command(v, "brightness"))
+        self.brightness_slider.set(self.brightness)
+        self.brightness_slider.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        
+        ctk.CTkLabel(self.panel, text="Contrast", fg_color="transparent", anchor="w").grid(row=2, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.slider_lbl["contrast"] = ctk.CTkLabel(self.panel, text=str(self.contrast), fg_color="transparent", anchor="e")
+        self.slider_lbl["contrast"].grid(row=2, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.contrast_slider = ctk.CTkSlider(self.panel, from_=-100, to=100, command=lambda v: self.slider_command(v, "contrast"))
+        self.contrast_slider.set(self.contrast)
+        self.contrast_slider.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        
+        ctk.CTkLabel(self.panel, text="Shadows", fg_color="transparent", anchor="w").grid(row=4, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.slider_lbl["shadows"] = ctk.CTkLabel(self.panel, text=str(self.shadows), fg_color="transparent", anchor="e")
+        self.slider_lbl["shadows"].grid(row=4, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.shadows_slider = ctk.CTkSlider(self.panel, from_=-100, to=100, command=lambda v: self.slider_command(v, "shadows"))
+        self.shadows_slider.set(self.shadows)
+        self.shadows_slider.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        
+        self.button_frame = ctk.CTkFrame(self.panel, fg_color="transparent")
+        self.button_frame.grid(row=6, column=0, columnspan=2, sticky="sew", padx=10, pady=(0, 10))
+        
+        self.btn_ok = ctk.CTkButton(self.button_frame, text="Apply", command=self._on_ok)
+        self.btn_ok.grid(row=0, column=0, padx=5)
+        self.btn_cancel = ctk.CTkButton(self.button_frame, text="Cancel", command=self._on_cancel)
+        self.btn_cancel.grid(row=0, column=1, padx=5)
+        
+        self.panel.grid_rowconfigure(6, weight=1)
+        self.panel.grid_columnconfigure(0, weight=1)
+        
+        # Handle window close (X button)
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        
+        # Binding <Enter> to OK button
+        self.bind("<Return>", lambda e: self.btn_ok.invoke())
+
+        # Determine window size
+        self.update_idletasks()
+        self.minsize(self.winfo_width(), self.winfo_height())
+        
+        # Put dialog on top of parent
+        self.transient(parent)
+        # Grab events
+        self.grab_set()
+        
+        # Center on parent
+        self._center_on_parent()
+
+        # Wait until closed
+        self.wait_window(self)
+    
+    def slider_command(self, value, slider):
+        setattr(self, slider, int(value))
+        self.slider_lbl[slider].configure(text=f"{getattr(self, slider)}")
+        self.update_display()
+        
+    def update_display(self):
+        self.preview_canvas.delete("all")
+        image = Image.fromarray(adjust_image(np.array(self.image), self.brightness, self.contrast, self.shadows))
+        self.tk_img = ImageTk.PhotoImage(image)
+        self.preview_canvas.create_image(self.canvas_size/2, self.canvas_size/2, anchor="center", image=self.tk_img, tag="background_image")
+    
+    def _on_ok(self):
+        if self.brightness != self.parent.wand_brightness or self.contrast != self.parent.wand_contrast or self.shadows != self.parent.wand_gamma:
+            self.values = (self.brightness, self.contrast, self.shadows)
+        else:
+            self.values = None
+        self.destroy()
+
+    def _on_cancel(self):
+        self.values = None
+        self.destroy()
+
+    def _center_on_parent(self):
+        self.update_idletasks()
+        px = self.parent.winfo_x()
+        py = self.parent.winfo_y()
+        pw = self.parent.winfo_width()
+        ph = self.parent.winfo_height()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        x = px + (pw - w) // 2
+        y = py + (ph - h) // 2
+        self.geometry(f"+{x}+{y}")
+
+def adjust_image(image, brightness=0, contrast=0, shadows=0):
+    """
+    Apply brightness, contrast and gamma to an image.
+
+    Parameters
+    ----------
+    image : numpy.array with dtype=uint8
+        Array representing the image to be adjusted.
+    brightness : int or float in range [-100,100]
+        The amount of brightness to be applied. A value of 0 leaves the image
+        untouched.
+    contrast : int or float in range [-100,100]
+        The amount of contrast to be applied. A value of 0 leaves the image
+        untouched.
+    shadows : int or float in range [-100,100]
+        The gamma correction to be applied. A value of 0 leaves the image
+        untouched. Internally, -100 is mapped to gamma = 0.5 and 100 is mapped
+        to gamma = 2.
+
+    Returns
+    -------
+    A numpy.array with dtype=uint8 representing the adjusted image.
+
+    """
+    img = image.astype(np.float32) / 255.0
+    alpha = 1 + contrast / 100.0
+    beta = brightness / 100.0
+    gamma = math.exp2(shadows / 100.0) # math.exp2 requires python >= 3.11
+    img = alpha * (img - 0.5) + 0.5 + beta
+    img = np.clip(img, 0.0, 1.0)
+    img = img ** gamma
+    return (255 * img).astype(np.uint8)
