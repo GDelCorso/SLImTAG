@@ -15,6 +15,7 @@ import shutil
 # Numerical arrays manipulation
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion
+from scipy.special import expit # sigmoid
 
 # Image manipulation and TkIntert (ImageTk)
 from PIL import Image, ImageDraw, ImageTk
@@ -190,7 +191,9 @@ class SegmentationApp(ctk.CTk):
 
         # brush control
         self.last_brush_pos = None
+        self.brush_shape = "Circle"
         self.brush_size = 30
+        self.brush_rot = 0
         self.mouse = {'x': None, 'y': None}
         
         # undo list
@@ -208,10 +211,13 @@ class SegmentationApp(ctk.CTk):
         self.sam_points = []
         self.sam_pt_labels = []
         
-        # SAM preprocessing (for sliders: range -100..100)
+        # SAM preprocessing (for sliders: range -100 .. 100)
         self.wand_brightness = 0
         self.wand_contrast = 0
         self.wand_gamma = 0
+        
+        # Magic wand threshold (e.g. SAM model threshold), range 0.0 .. 1.0
+        self.wand_threshold = 0.5 # SAM has 0.5 as default value
 
         # boolean to track if mouse buttons are pressed
         self.b3_pressed = False
@@ -250,6 +256,12 @@ class SegmentationApp(ctk.CTk):
         mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
         mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
         self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
+        # Menu Magic Wand (top menu)
+        # TODO implement load/save configuration
+        wand_menu = tk.Menu(self.menu_bar, tearoff=0)
+        wand_menu.add_command(label="Load configuration", command=None)
+        wand_menu.add_command(label="Save configuration", command=None)
+        self.menu_bar.add_cascade(label="Magic wand", menu=wand_menu)
         
         panels_width = 250
         # Left panel for tools
@@ -365,17 +377,30 @@ class SegmentationApp(ctk.CTk):
         self.cc_btn.grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
         
         # Brush options
-        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush size", fg_color="transparent", anchor="w").grid(row=0, column=0, sticky="ew", padx=(10, 5), pady=(8,2)) #font=ctk.CTkFont(size=11),
+        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Shape", fg_color="transparent", anchor="w").grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 2))
+        self.brush_shape_btn = ctk.CTkSegmentedButton(self.tool_opt_frame["brush"], values=["Circle", "Square", "Line"], command=None)
+        self.brush_shape_btn.set("Circle") # TODO implement shape
+        self.brush_shape_btn.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        
+        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Size", fg_color="transparent", anchor="w").grid(row=2, column=0, sticky="ew", padx=(10, 5), pady=(10, 2)) #font=ctk.CTkFont(size=11),
         self.brush_size_lbl = ctk.CTkLabel(self.tool_opt_frame["brush"], text=str(self.brush_size), fg_color="transparent", anchor="e")
-        self.brush_size_lbl.grid(row=0, column=1, sticky="ew", padx=(5, 10), pady=(8,2))
-        self.brush_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=5, to=100,
-                                          command=lambda v: (setattr(self,"brush_size",int(v)), self.brush_size_lbl.configure(text=str(self.brush_size))))
-        self.brush_slider.set(self.brush_size)
-        self.brush_slider.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 8))
+        self.brush_size_lbl.grid(row=2, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.brush_size_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=5, to=100,
+                                               command=lambda v: (setattr(self,"brush_size",int(v)), self.brush_size_lbl.configure(text=str(self.brush_size))))
+        self.brush_size_slider.set(self.brush_size)
+        self.brush_size_slider.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        
+        ctk.CTkLabel(self.tool_opt_frame["brush"], text="Rotation", fg_color="transparent", anchor="w").grid(row=4, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.brush_rot_lbl = ctk.CTkLabel(self.tool_opt_frame["brush"], text=f"{self.brush_rot}°", fg_color="transparent", anchor="e")
+        self.brush_rot_lbl.grid(row=4, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.brush_rot_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=0, to=180,
+                                              command=lambda v: (setattr(self,"brush_rot",int(v)), self.brush_rot_lbl.configure(text=f"{self.brush_rot}°")))
+        self.brush_rot_slider.set(self.brush_rot) # TODO implement rotation
+        self.brush_rot_slider.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         
         # Magic wand options
         self.wand_adj_frame = ctk.CTkFrame(self.tool_opt_frame["wand"], fg_color=TOOL_PANEL_SUBCOLOR["wand"])
-        self.wand_adj_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.wand_adj_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=10, pady=(10, 0))
         ctk.CTkLabel(self.wand_adj_frame, text="Preprocessing", fg_color="transparent", font=ctk.CTkFont(weight='bold')).grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(3,0))
         ctk.CTkLabel(self.wand_adj_frame, text="Brightness", fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=(10,0), pady=(3,0))
         self.wand_brightness_lbl = ctk.CTkLabel(self.wand_adj_frame, text=str(self.wand_brightness), fg_color="transparent", anchor="e")
@@ -388,10 +413,19 @@ class SegmentationApp(ctk.CTk):
         self.wand_gamma_lbl.grid(row=3, column=1, sticky="ew", padx=(0,10), pady=(3,0))
         self.wand_auto_update = ctk.CTkButton(self.wand_adj_frame, text="Auto update", command=None)
         self.wand_auto_update.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(3,5))
+        self.wand_auto_update.configure(state='disabled') # TODO implement auto update
         self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual update", command=None)
         self.wand_manual_update.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,10))
         
         self.wand_adj_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(self.tool_opt_frame["wand"], text="Wand threshold", fg_color="transparent", anchor="w").grid(row=2, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.wand_threshold_lbl = ctk.CTkLabel(self.tool_opt_frame["wand"], text=f"{self.wand_threshold:.2f}", fg_color="transparent", anchor="e")
+        self.wand_threshold_lbl.grid(row=2, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.wand_threshold_slider = ctk.CTkSlider(self.tool_opt_frame["wand"], from_=0.0, to=1.0,
+                                                   command=lambda v: (setattr(self,"wand_threshold",float(v)), self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")))
+        self.wand_threshold_slider.set(self.wand_threshold) # TODO
+        self.wand_threshold_slider.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         
         
         # Grid configurations for left panel frames
@@ -1775,7 +1809,10 @@ class SegmentationApp(ctk.CTk):
         self.push_undo()
         masks, _, _ = self.sam.predict(np.array(self.sam_points),
                                        np.array(self.sam_pt_labels),
-                                       multimask_output=False)
+                                       multimask_output=False,
+                                       return_logits=True)
+        
+        masks = expit(masks) > self.wand_threshold
         
         if not multipoint:
             if add:
