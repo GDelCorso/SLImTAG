@@ -26,7 +26,7 @@ from tkinter import filedialog#, simpledialog, messagebox
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog, EntryDialog, MaskEditDialog
+from slimtag_utils import MultiButtonDialog, MaskEditDialog#, EntryDialog
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
 # Torch and SAM (Segment anything model)
@@ -279,28 +279,17 @@ class SegmentationApp(ctk.CTk):
         # Statusbar
         self.statusbar = ctk.CTkFrame(self, height=24, fg_color=("gray92", "gray14"))
         self.statusbar.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=0, pady=0)
-        
-        self.statusbar_left = ctk.CTkFrame(self.statusbar, fg_color=("gray92", "gray14"))
-        self.statusbar_left.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
-        self.statusbar_right = ctk.CTkFrame(self.statusbar, fg_color=("gray92", "gray14"))
-        self.statusbar_right.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
 
-        self.status_icon = ctk.CTkLabel(self.statusbar_left, text=STATUS_SYMBOL, text_color=STATUS_COLOR["idle"], width=14)
+        self.status_icon = ctk.CTkLabel(self.statusbar, text=STATUS_SYMBOL, text_color=STATUS_COLOR["idle"], width=14)
         self.status_icon.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(0, 2))
-        self.status_label = ctk.CTkLabel(self.statusbar_left, text="Initializing...")
+        self.status_label = ctk.CTkLabel(self.statusbar, text="Initializing...")
         self.status_label.grid(row=0, column=1, sticky="w", padx=(4, 0))
-        self.status_sam_label = ctk.CTkLabel(self.statusbar_left, text="") # for SAM asynchronous loading
+        self.status_sam_label = ctk.CTkLabel(self.statusbar, text="") # for SAM asynchronous loading
         self.status_sam_label.grid(row=0, column=2, sticky="w", padx=(4, 0))
+        self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
+        self.zoom_label.grid(row=0, column=4, sticky="e", padx=10)
         
-        self.status_model_label = ctk.CTkLabel(self.statusbar_right, text=f"SAM model: {MODEL_TYPE}")
-        self.status_model_label.grid(row=0, column=0, sticky="w")
-        
-        self.zoom_label = ctk.CTkLabel(self.statusbar_right, textvariable=self.zoom_label_var)
-        self.zoom_label.grid(row=0, column=2, sticky="e", padx=10)
-        
-        self.statusbar.grid_columnconfigure([0, 1], weight=1, uniform="equal")
-        self.statusbar_left.grid_columnconfigure(2, weight=1)
-        self.statusbar_right.grid_columnconfigure(1, weight=1)
+        self.statusbar.grid_columnconfigure(3, weight=1)
         
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -399,6 +388,10 @@ class SegmentationApp(ctk.CTk):
         self.brush_rot_slider.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         
         # Magic wand options
+        self.wand_model_menu = ctk.CTkOptionMenu(self.tool_opt_frame["wand"], values=["SAM (ViT-B)"], command=None) # TODO
+        self.wand_model_menu.set("SAM (ViT-B)")
+        self.wand_model_menu.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
+        
         self.wand_adj_frame = ctk.CTkFrame(self.tool_opt_frame["wand"], fg_color=TOOL_PANEL_SUBCOLOR["wand"])
         self.wand_adj_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=10, pady=(10, 0))
         ctk.CTkLabel(self.wand_adj_frame, text="Preprocessing", fg_color="transparent", font=ctk.CTkFont(weight='bold')).grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(3,0))
