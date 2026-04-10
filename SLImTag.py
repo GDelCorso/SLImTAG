@@ -125,7 +125,7 @@ else:
 
 
 #%% CTK parameters
-ctk.set_appearance_mode("System")   # System theme
+#ctk.set_appearance_mode("System")   # System theme
 #ctk.set_appearance_mode("dark") # force dark mode for testing
 ctk.set_default_color_theme("blue") # CTK color theme
 
@@ -135,6 +135,9 @@ class SegmentationApp(ctk.CTk):
         super().__init__()
         self.title("SLImTAG")
         self.geometry("1300x900")
+        
+        self.appearance_mode = tk.StringVar(self, value="dark")
+        ctk.set_appearance_mode(self.appearance_mode.get())
 
         #%% STATE ---------------------------------------------------------------
         # Full image and mask
@@ -304,7 +307,7 @@ class SegmentationApp(ctk.CTk):
         
         # Images in folder navigation frame
         self.images_in_folder_frame = ctk.CTkFrame(self.right_panel)
-        self.images_in_folder_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        self.images_in_folder_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
         self.images_in_folder_label = ctk.CTkLabel(self.images_in_folder_frame, textvariable=self.images_num_label_var)
         self.images_in_folder_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
         # WHEN PREVIOUS IMAGE WILL BE IMPLEMENTED: UNCOMMENT THE FOLLOWING THREE LINES
@@ -318,6 +321,22 @@ class SegmentationApp(ctk.CTk):
         self.next_image_btn.configure(state="disabled")
         
         self.images_in_folder_frame.grid_columnconfigure([0, 1], weight=1)
+        
+        # Light/dark mode toggle
+        self.lightdark_frame = ctk.CTkFrame(self.right_panel, fg_color="transparent")
+        self.lightdark_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(5, 10))
+        self.sun_image = ctk.CTkImage(light_image=Image.open("images/assets/sun-light.png").convert("RGBA"),
+                                      dark_image=Image.open("images/assets/sun-dark.png").convert("RGBA"),
+                                      size=(21, 21))
+        self.moon_image = ctk.CTkImage(light_image=Image.open("images/assets/moon-light.png").convert("RGBA"),
+                                       dark_image=Image.open("images/assets/moon-dark.png").convert("RGBA"),
+                                       size=(21, 21))
+        ctk.CTkLabel(self.lightdark_frame, text="", image=self.sun_image, anchor="e").grid(row=0, column=0, sticky="ew", padx=5)
+        ctk.CTkLabel(self.lightdark_frame, text="", image=self.moon_image, anchor="w").grid(row=0, column=2, sticky="ew", padx=5)
+        ctk.CTkSwitch(self.lightdark_frame, text="", variable=self.appearance_mode, onvalue="dark", offvalue="light", command=self.toggle_appearance, width=0).grid(row=0, column=1, sticky="ew", padx=(7, 0))
+        # button_color=("#F2C138", "#25AFEE"), fg_color="#FAE9B1", progress_color="#092E40", 
+        
+        self.lightdark_frame.grid_columnconfigure([0, 2], weight=1)
         
         self.right_panel.grid_rowconfigure(1, weight=1)
 
@@ -599,6 +618,9 @@ class SegmentationApp(ctk.CTk):
             if self.thread is None or not self.thread.is_alive():
                 self.thread = threading.Thread(target=self.async_loader, daemon=True)
                 self.thread.start()
+    
+    def toggle_appearance(self):
+        ctk.set_appearance_mode(self.appearance_mode.get())
     
     def update_display(self, update_all="Global"):
         '''
