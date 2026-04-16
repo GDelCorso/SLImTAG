@@ -230,41 +230,58 @@ class SegmentationApp(ctk.CTk):
         
         # Top Menu
         self.menu_bar = tk.Menu(self)
+        self.set_menu_theme(self.menu_bar, "dark")
+
         self.config(menu=self.menu_bar)
         # Menu File (top menu)
-        file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Ctrl+Q")
-        self.menu_bar.add_cascade(label="File", menu=file_menu)
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.set_menu_theme(self.file_menu, "dark")
+
+        self.file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Ctrl+Q")
+        self.menu_bar.add_cascade(label="File", menu=self.file_menu)
+       
         # Menu Edit (top menu)
-        edit_menu = tk.Menu(self.menu_bar, tearoff=0)
-        edit_menu.add_command(label="Undo", command=self.undo, accelerator="Ctrl+Z")
-        self.menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        self.edit_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.set_menu_theme(self.edit_menu, "dark")
+
+        self.edit_menu.add_command(label="Undo", command=self.undo, accelerator="Ctrl+Z")
+        self.menu_bar.add_cascade(label="Edit", menu=self.edit_menu)
+        
         # Menu View (top menu)
-        view_menu = tk.Menu(self.menu_bar, tearoff=0)
-        view_menu.add_command(label="Zoom in", command=self.zoom_in, accelerator="Ctrl++")
-        view_menu.add_command(label="Zoom out", command=self.zoom_out, accelerator="Ctrl+-")
-        view_menu.add_command(label="Reset zoom", command=self.reset_zoom, accelerator="Ctrl+0")
-        self.menu_bar.add_cascade(label="View", menu=view_menu)
+        self.view_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.set_menu_theme(self.view_menu, "dark")
+
+        self.view_menu.add_command(label="Zoom in", command=self.zoom_in, accelerator="Ctrl++")
+        self.view_menu.add_command(label="Zoom out", command=self.zoom_out, accelerator="Ctrl+-")
+        self.view_menu.add_command(label="Reset zoom", command=self.reset_zoom, accelerator="Ctrl+0")
+        self.menu_bar.add_cascade(label="View", menu=self.view_menu)
+        
         # Menu Image (top menu)
-        image_menu = tk.Menu(self.menu_bar, tearoff=0)
-        image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
-        image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F")
-        self.menu_bar.add_cascade(label="Image", menu=image_menu)
+        self.image_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.set_menu_theme(self.image_menu, "dark")
+
+        self.image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
+        self.image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F")
+        self.menu_bar.add_cascade(label="Image", menu=self.image_menu)
         # Menu Mask (top menu)
-        mask_menu = tk.Menu(self.menu_bar, tearoff=0)
-        mask_menu.add_command(label="Load mask", command=self.load_mask)
-        mask_menu.add_command(label="Save mask", command=lambda s=True: self.save_mask(switch_fast=s), accelerator="Ctrl+S")
-        mask_menu.add_command(label="Save mask as...", command=lambda s=False: self.save_mask(switch_fast=s))
-        mask_menu.add_separator()
-        mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
-        mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
-        self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
+        self.mask_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.set_menu_theme(self.mask_menu, "dark")
+
+        self.mask_menu.add_command(label="Load mask", command=self.load_mask)
+        self.mask_menu.add_command(label="Save mask", command=lambda s=True: self.save_mask(switch_fast=s), accelerator="Ctrl+S")
+        self.mask_menu.add_command(label="Save mask as...", command=lambda s=False: self.save_mask(switch_fast=s))
+        self.mask_menu.add_separator()
+        self.mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
+        self.mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
+        self.menu_bar.add_cascade(label="Mask", menu=self.mask_menu)
         # Menu Magic Wand (top menu)
         # TODO implement load/save configuration
-        wand_menu = tk.Menu(self.menu_bar, tearoff=0)
-        wand_menu.add_command(label="Load configuration", command=None)
-        wand_menu.add_command(label="Save configuration", command=None)
-        self.menu_bar.add_cascade(label="Magic wand", menu=wand_menu)
+        self.wand_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.set_menu_theme(self.wand_menu, "dark")
+
+        self.wand_menu.add_command(label="Load configuration", command=None)
+        self.wand_menu.add_command(label="Save configuration", command=None)
+        self.menu_bar.add_cascade(label="Magic wand", menu=self.wand_menu)
         
         panels_width = 250
         # Left panel for tools
@@ -554,7 +571,14 @@ class SegmentationApp(ctk.CTk):
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
         
-        
+    
+    def set_menu_theme(self, menu, mode):
+        if mode == 'dark':
+            menu.configure(bd=0, background="#242424", fg="#999999",activebackground="#242424", activeforeground="white", activeborderwidth=0)
+        else:
+            menu.configure(bd=0, background="#d9d9d9", fg="#000000",activebackground="#d9d9d9", activeforeground="#242424", activeborderwidth=0)
+            
+
 
 
 
@@ -621,7 +645,15 @@ class SegmentationApp(ctk.CTk):
     
     def toggle_appearance(self):
         ctk.set_appearance_mode(self.appearance_mode.get())
-    
+        self.set_menu_theme(self.menu_bar,self.appearance_mode.get())
+        self.set_menu_theme(self.file_menu,self.appearance_mode.get())
+        self.set_menu_theme(self.edit_menu,self.appearance_mode.get())
+        self.set_menu_theme(self.view_menu,self.appearance_mode.get())
+        self.set_menu_theme(self.image_menu,self.appearance_mode.get())
+        self.set_menu_theme(self.mask_menu,self.appearance_mode.get())
+        self.set_menu_theme(self.wand_menu,self.appearance_mode.get())
+        self.set_menu_theme(self.active_context_menu,self.appearance_mode.get())
+        
     def update_display(self, update_all="Global"):
         '''
         Aux method to update display whenever a change occurs.
@@ -955,6 +987,8 @@ class SegmentationApp(ctk.CTk):
         context_menu.post(e.x_root, e.y_root)
 
         self.active_context_menu = context_menu
+
+        self.set_menu_theme(self.active_context_menu, self.appearance_mode.get())
     
     def edit_mask(self, target_id): 
         self.deactivate_tools()
