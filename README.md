@@ -152,11 +152,11 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 
 #### General
 
-- ~~[ ] Implement argparse with `--no-sam` option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)~~
-- ~~[ ] ALTERNATIVE: implement classic scipy's region detection algorithms that are bound to magic wand when SLImTAG is called with `--no-sam`~~
+- [ ] ~~Implement argparse with `--no-sam` option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)~~
+- [ ] ~~ALTERNATIVE: implement classic scipy's region detection algorithms that are bound to magic wand when SLImTAG is called with `--no-sam`~~
 - [ ] Implement configuration file that is checked at startup with all the parameters
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
-- ~~[ ] Convert hardcoded parameters to argparse arguments~~
+- [ ] ~~Convert hardcoded parameters to argparse arguments~~
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
 - [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
 - [x] Move color picker to utils (and cleanup its code)
@@ -169,6 +169,9 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [x] Track if a mask is unsaved, and prompt a "There are unsaved changes to the mask. Quit anyway?" message accordingly (check to be added in `quit_program` method)
 - [ ] "Unsaved changes" status does not look at the undo history ― if you open a mask, do something, then undo, the mask will still be considered "modified"
 - [x] Bind Tab/Shift-Tab to cycle between masks
+- [ ] `color_palette.json`: check consistency, upgrade for light mode
+- [ ] Change placeholder icons `images/buttons/*_light_*.png` and `images/icons/*_light_*.png` with light mode versions
+- [ ] Upgrade main icon
 
 #### View
 
