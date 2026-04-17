@@ -135,7 +135,7 @@ class SegmentationApp(ctk.CTk):
         super().__init__()
         self.title("SLImTAG")
         self.geometry("1300x900")
-        
+        self.iconphoto(False, ImageTk.PhotoImage(file=os.path.join("images", "SlimtTAG_icon.png")))
         self.appearance_mode = tk.StringVar(self, value="dark")
         ctk.set_appearance_mode(self.appearance_mode.get())
 
