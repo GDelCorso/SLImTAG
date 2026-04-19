@@ -176,15 +176,15 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 #### View
 
 - [x] Zoom on mouse location instead of top left corner
-- [ ] PROBABLY NO MORE NECESSARY: Define a function "compute_zoom_limits(self)" that computes min and max zoom -- see commented pseudocode
+- [ ] ~~PROBABLY NO MORE NECESSARY: Define a function "compute_zoom_limits(self)" that computes min and max zoom -- see commented pseudocode~~
 
 #### Masks management
 
-- [ ] BUG: Brush subraction and connected component currently don't work when "Only add on empty" is active
+- [ ] ~~BUG: Brush subraction and connected component currently don't work when "Only add on empty" is active~~
 - [x] When a mask is removed, a new mask additions should be placed on the first empty value of the list
 - [ ] Allow "Clean Mask" undo
-- [ ] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
-- [ ] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
+- [x] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
+- [x] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
 - [ ] TO CONSIDER: allow opening a mask without an underlying image for direct mask editing (maybe create a dummy black image with suitable size, to be discarded)
 
 #### Brush
