@@ -969,7 +969,7 @@ class SegmentationApp(ctk.CTk):
             for tool in ["wand", "wand_all", "wand_multi", "wand_box"]:
                 self.tool_btn[tool].configure(state="disabled", image=self.tool_icon[tool]["disabled"])
         # TODO remove tool from 'always disabled' list when the corresponding function has been implemented
-        always_disabled = ["eraser", "polygon", "bbox", "clean", "bucket",
+        always_disabled = ["polygon", "bbox", "bucket",
                            "fill", "denoise", "interpolate",
                            "wand_all", "wand_multi", "wand_box",
                            "ruler", "area",
@@ -1532,18 +1532,18 @@ class SegmentationApp(ctk.CTk):
             self.apply_smoothing(y, x, operation=op)
             return
     
-        if self.tool_active["cut"] and check_inside_image:
-            self.connected_component_click(e, remove_only=not shift_pressed)
+        if (self.tool_active["cut"] or self.tool_active["clean"]) and check_inside_image:
+            self.connected_component_click(e, remove_only=(self.tool_active["cut"] and not shift_pressed))
             return
         
         if self.tool_active["wand"] and check_inside_image:
             self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             return
         
-        if self.tool_active["brush"] and check_inside_image:
+        if (self.tool_active["brush"] or self.tool_active["eraser"]) and check_inside_image:
             x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
-            self.brush_at(x, y, add=not shift_pressed)
+            self.brush_at(x, y, add=(self.tool_active["brush"] and not shift_pressed))
             self.push_undo()
             self.update_display(update_all="Mask")
             self.draw_brush_preview(e)
@@ -1602,7 +1602,7 @@ class SegmentationApp(ctk.CTk):
         
         # Check if the brush is not active (only draggable tool)
         # TODO implement other tools
-        if not self.tool_active["brush"]:
+        if not (self.tool_active["brush"] or self.tool_active["eraser"]):
             return
         
         # Define the brush drag
@@ -1612,7 +1612,7 @@ class SegmentationApp(ctk.CTk):
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
             self.push_undo() # TODO: Check problem for undo
-            self.brush_at(x1, y1, add=not shift_pressed)
+            self.brush_at(x1, y1, add=(self.tool_active["brush"] and not shift_pressed))
             self.update_display(update_all="Mask")
             self.draw_brush_preview(e)
             
@@ -1634,7 +1634,7 @@ class SegmentationApp(ctk.CTk):
             for i in np.linspace(0, dist + 1, steps):
                 xi = int(x0 + dx * i / dist)
                 yi = int(y0 + dy * i / dist)
-                self.brush_at(xi, yi, add=not shift_pressed)
+                self.brush_at(xi, yi, add=(self.tool_active["brush"] and not shift_pressed))
 
             self.update_display(update_all="Mask") # update only mask
             self.draw_brush_preview(e)
@@ -1918,12 +1918,12 @@ class SegmentationApp(ctk.CTk):
         self.canvas.delete("brush")
         
         # TODO do also for eraser
-        if not self.tool_active["brush"]:
+        if not (self.tool_active["brush"] or self.tool_active["eraser"]):
             return
 
         r = int(self.brush_size * self.zoom / 2)
         outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
-        dash = (5,10) if shift_pressed else None
+        dash = (5,10) if (shift_pressed or self.tool_active["eraser"]) else None
 
         self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
         
