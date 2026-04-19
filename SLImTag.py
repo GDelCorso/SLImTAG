@@ -847,9 +847,9 @@ class SegmentationApp(ctk.CTk):
 
     def set_menu_theme(self, menu, mode):
         if mode.lower() == 'dark':
-            menu.configure(bd=0, background="#242424", fg="#999999",activebackground="#242424", activeforeground="white", activeborderwidth=0)
+            menu.configure(bd=0, background="#242424", fg="#999999", activebackground="#242424", activeforeground="white", activeborderwidth=0)
         else:
-            menu.configure(bd=0, background="#d9d9d9", fg="#000000",activebackground="#d9d9d9", activeforeground="#242424", activeborderwidth=0)
+            menu.configure(bd=0, background="#d9d9d9", fg="#000000", activebackground="#d9d9d9", activeforeground="#242424", activeborderwidth=0)
 
     #%% NAVIGATION PANEL
     def show_preview_frame(self, preview):
@@ -1124,18 +1124,16 @@ class SegmentationApp(ctk.CTk):
                                         image=self.icons_dict["EyeOpen"]["normal"],
                                         width=34, height=34,
                                         fg_color="transparent",
-                                        command=lambda: self.toggle_mask_hide(mid, not mask_frame.hidden)) # TODO
+                                        command=lambda: self.toggle_mask_hide(mid, not mask_frame.hidden))
         mask_frame.hide.grid(row=0, column=2, padx=(5,2), pady=5)
         mask_frame.hidden = False
-        #mask_frame.hide.configure(state="disabled", image=self.icons_dict["EyeOpen"]["disabled"]) # TODO remove when implemented
         mask_frame.lock = ctk.CTkButton(mask_frame, text="",
                                         image=self.icons_dict["LockOpen"]["normal"],
                                         width=34, height=34,
                                         fg_color="transparent",
-                                        command=lambda: self.toggle_mask_lock(mid, not mask_frame.locked)) # TODO
+                                        command=lambda: self.toggle_mask_lock(mid, not mask_frame.locked))
         mask_frame.lock.grid(row=0, column=3, padx=2, pady=5)
         mask_frame.locked = False
-        #mask_frame.lock.configure(state="disabled", image=self.icons_dict["LockOpen"]["disabled"]) # TODO remove when implemented
         clear_btn = ctk.CTkButton(mask_frame, text="×",
                                   font=ctk.CTkFont(size=24, weight="bold"),
                                   width=34, height=34,
@@ -1216,7 +1214,10 @@ class SegmentationApp(ctk.CTk):
             return
         
         self.deactivate_tools()
-        if self.mask_orig is None: return
+        
+        if self.mask_orig is None:
+            return
+        
         self.push_undo()
         self.mask_locked[self.mask_orig == mid] = False # free locks
         self.mask_orig[self.mask_orig == mid] = 0
@@ -1236,7 +1237,8 @@ class SegmentationApp(ctk.CTk):
         self.update_display(update_all="Mask")
     
     def clear_active_mask(self):
-        if self.active_mask_id is None: return
+        if self.active_mask_id is None:
+            return
         self.clear_mask(self.active_mask_id)
     
     def clear_all_masks(self):
@@ -1290,7 +1292,7 @@ class SegmentationApp(ctk.CTk):
         if propagate:
             mask_ids = list(self.mask_labels.keys())
             for mid in mask_ids:
-                self.toggle_mask_lock(mid, set_lock)        
+                self.toggle_mask_lock(mid, set_lock)
 
     #%% LOAD & SAVE METHODS
     def load_image(self, path=None, add_mask=True):
@@ -1375,8 +1377,8 @@ class SegmentationApp(ctk.CTk):
             #self.next_image_btn.configure(state="disabled")
             # TODO image navigation
 
-        self.toggle_all_masks_hide(set_hide=False, enabled=True)    
-        self.toggle_all_masks_lock(set_lock=False, enabled=True)   
+        self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.set_status("ready", "Ready")
 
@@ -1465,7 +1467,7 @@ class SegmentationApp(ctk.CTk):
             return
         
         self.deactivate_tools()
-        p = filedialog.askopenfilename(filetypes=[("IndexedPNG or PNG", "*.png")])
+        p = filedialog.askopenfilename(filetypes=[("PNG (indexed or RGB)", "*.png")])
         if not p:
             return
         
@@ -1534,8 +1536,8 @@ class SegmentationApp(ctk.CTk):
             if unique_colors:
                 self.change_mask(target_id=1)
 
-        self.toggle_all_masks_hide(set_hide=False, enabled=True)    
-        self.toggle_all_masks_lock(set_lock=False, enabled=True)   
+        self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.update_display()
         self.set_status("ready", "Ready")
@@ -1554,7 +1556,7 @@ class SegmentationApp(ctk.CTk):
     
         if not switch_fast:
             # Save as()
-            p = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG indexed", "*.png")])
+            p = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG (indexed)", "*.png")])
             if not p:
                 return
         else: # Save()
@@ -1936,7 +1938,6 @@ class SegmentationApp(ctk.CTk):
     #     self.set_modified(True)
     #     self.update_display(update_all="Mask")
     # TODO check if "brush" is still needed
-    # TODO unify brush and brush_at methods?
     def brush_at(self, x, y, add=True):
         '''
         Aux method to define brush position without updating display or undo.
@@ -2002,7 +2003,6 @@ class SegmentationApp(ctk.CTk):
     def _draw_brush_preview(self, x, y, shift_pressed=False):
         self.canvas.delete("brush")
         
-        # TODO do also for eraser
         if not (self.tool_active["brush"] or self.tool_active["eraser"]):
             return
 
@@ -2137,13 +2137,17 @@ class SegmentationApp(ctk.CTk):
         the clicked component or all other pixels of the active mask, saving 
         the previous state for undo, and updating the display.
         '''
-        if self.mask_orig is None or self.active_mask_id is None: return
+        if self.mask_orig is None or self.active_mask_id is None:
+            return
+        
         x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
         comp = self.get_connected_component(self.mask_orig, y, x, self.active_mask_id)
         self.push_undo()
         
+        # notice that "connected component" only acts on active mask,
+        # so the lock check is not needed
         if remove_only:
             self.mask_orig[comp] = 0
         else:
