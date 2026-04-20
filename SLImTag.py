@@ -231,9 +231,10 @@ class SegmentationApp(ctk.CTk):
         self.tool_opt_map = {}
         self.tool_opt_map.update(dict.fromkeys(["brush", "eraser"], "brush"))
         self.tool_opt_map.update(dict.fromkeys(["wand", "wand_all", "wand_multi", "wand_box"], "wand"))
+        self.tool_opt_map.update(dict.fromkeys(["smooth"], "smooth"))
         # TODO tool frame for each tool
         self.tool_opt_map.update(dict.fromkeys(["polygon", "bbox", "cut", "clean", "bucket",
-                                                "smooth", "fill", "denoise", "interpolate",
+                                                "fill", "denoise", "interpolate",
                                                 "ruler", "area"], "empty"))
         # TODO create custom empty frames, one for each custom button
         self.tool_opt_map["custom_1"] = "empty"
@@ -246,6 +247,11 @@ class SegmentationApp(ctk.CTk):
         self.brush_shape = "Circle"
         self.brush_size = 30
         self.brush_rot = 0
+        
+        # smooth control
+        self.smooth_iter = 1 # number of iterations of outer cycle
+        self.smooth_n_erosions = 1
+        self.smooth_n_dilations = 1
         
         # undo list
         self.undo_stack = []
@@ -311,7 +317,7 @@ class SegmentationApp(ctk.CTk):
         edit_menu = tk.Menu(self.menu_bar, tearoff=0)
         edit_menu.add_command(label="Undo", command=self.undo, accelerator="Ctrl+Z")
         # TODO implement preferences window
-        edit_menu.add_command(label="Preferences...", command=None)
+        edit_menu.add_command(label="Preferences...", command=None, state="disabled")
         self.topmenu_items["edit"] = edit_menu
         self.menu_bar.add_cascade(label="Edit", menu=edit_menu)
 
@@ -326,7 +332,7 @@ class SegmentationApp(ctk.CTk):
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
-        #image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F")
+        image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F", state="disabled")
         # TODO reactivate import folder
         self.topmenu_items["image"] = image_menu
         self.menu_bar.add_cascade(label="Image", menu=image_menu)
@@ -345,16 +351,16 @@ class SegmentationApp(ctk.CTk):
         # Menu Magic Wand (top menu)
         # TODO implement load/save configuration
         wand_menu = tk.Menu(self.menu_bar, tearoff=0)
-        wand_menu.add_command(label="Load configuration", command=None)
-        wand_menu.add_command(label="Save configuration", command=None)
+        wand_menu.add_command(label="Load configuration", command=None, state="disabled")
+        wand_menu.add_command(label="Save configuration", command=None, state="disabled")
         self.topmenu_items["wand"] = wand_menu
         self.menu_bar.add_cascade(label="Magic wand", menu=wand_menu)
         
         # Menu Help (top menu)
         # TODO implement help functions
         help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(label="Documentation", command=None)
-        help_menu.add_command(label="About", command=None)
+        help_menu.add_command(label="Documentation", command=None, state="disabled")
+        help_menu.add_command(label="About", command=None, state="disabled")
         self.topmenu_items["help"] = help_menu
         self.menu_bar.add_cascade(label="Help", menu=help_menu)
         
@@ -558,6 +564,33 @@ class SegmentationApp(ctk.CTk):
         self.wand_threshold_slider.set(self.wand_threshold) # TODO
         self.wand_threshold_slider.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         
+        # Smoothing options
+        ctk.CTkLabel(self.tool_opt_frame["smooth"], text="Smoothing settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
+        ctk.CTkLabel(self.tool_opt_frame["smooth"], text="Number of iterations", fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.smooth_iter_lbl = ctk.CTkLabel(self.tool_opt_frame["smooth"], text=str(self.smooth_iter), fg_color="transparent", anchor="e")
+        self.smooth_iter_lbl.grid(row=1, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.smooth_iter_slider = ctk.CTkSlider(self.tool_opt_frame["smooth"], from_=1, to=5,
+                                                number_of_steps=4,
+                                                command=lambda v: (setattr(self,"smooth_iter",int(v)), self.smooth_iter_lbl.configure(text=str(self.smooth_iter))))
+        self.smooth_iter_slider.set(self.smooth_iter)
+        self.smooth_iter_slider.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        ctk.CTkLabel(self.tool_opt_frame["smooth"], text="Number of erosion steps", fg_color="transparent", anchor="w").grid(row=3, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.smooth_erosion_lbl = ctk.CTkLabel(self.tool_opt_frame["smooth"], text=str(self.smooth_n_erosions), fg_color="transparent", anchor="e")
+        self.smooth_erosion_lbl.grid(row=3, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.smooth_erosion_slider = ctk.CTkSlider(self.tool_opt_frame["smooth"], from_=0, to=10,
+                                                   number_of_steps=10,
+                                                   command=lambda v: (setattr(self,"smooth_n_erosions",int(v)), self.smooth_erosion_lbl.configure(text=str(self.smooth_n_erosions))))
+        self.smooth_erosion_slider.set(self.smooth_n_erosions)
+        self.smooth_erosion_slider.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        ctk.CTkLabel(self.tool_opt_frame["smooth"], text="Number of dilation steps", fg_color="transparent", anchor="w").grid(row=5, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.smooth_dilation_lbl = ctk.CTkLabel(self.tool_opt_frame["smooth"], text=str(self.smooth_n_dilations), fg_color="transparent", anchor="e")
+        self.smooth_dilation_lbl.grid(row=5, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.smooth_dilation_slider = ctk.CTkSlider(self.tool_opt_frame["smooth"], from_=0, to=10,
+                                                    number_of_steps=10,
+                                                    command=lambda v: (setattr(self,"smooth_n_dilations",int(v)), self.smooth_dilation_lbl.configure(text=str(self.smooth_n_dilations))))
+        self.smooth_dilation_slider.set(self.smooth_n_dilations)
+        self.smooth_dilation_slider.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+
         #%% Right panel: Navigation
         self.navigation_frame = ctk.CTkFrame(self.right_panel, fg_color="transparent")
         self.navigation_frame.grid(row=3, column=0, sticky="n", padx=10, pady=(5, 10))
@@ -2181,13 +2214,20 @@ class SegmentationApp(ctk.CTk):
         self.push_undo()
     
         struct = np.ones((size, size), dtype=bool)
-    
+        
+        comp_smooth = comp.copy()
+        
         if operation == "dilation":
-            comp_smooth = binary_dilation(comp, structure=struct, iterations=1)
+            for _ in range(self.smooth_iter):
+                comp_smooth = binary_erosion(comp_smooth, structure=struct, iterations=self.smooth_n_erosions)
+                comp_smooth = binary_dilation(comp_smooth, structure=struct, iterations=self.smooth_n_dilations)
         elif operation == "erosion":
-            comp_smooth = binary_erosion(comp, structure=struct, iterations=1)
+            for _ in range(self.smooth_iter):
+                comp_smooth = binary_dilation(comp_smooth, structure=struct, iterations=self.smooth_n_dilations)
+                comp_smooth = binary_erosion(comp_smooth, structure=struct, iterations=self.smooth_n_erosions)
         else:
             return
+
         
         self.mask_orig[comp] = 0
         # (comp|(~self.mask_locked)) means: "during erosion, allow changes on
