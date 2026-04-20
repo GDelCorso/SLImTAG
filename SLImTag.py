@@ -28,10 +28,11 @@ from PIL import Image, ImageDraw, ImageTk
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog
 import customtkinter as ctk
 
 # Custom utils
+from slimtag_utils import SplashScreen
 from slimtag_utils import MultiButtonDialog, MaskEditDialog
 from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
@@ -139,41 +140,15 @@ ctk.set_appearance_mode("dark")
 
 HIGHLIGHT_COLOR = ctk.ThemeManager.theme["CTkButton"]["border_color"]
 
-class SplashScreen(ctk.CTkToplevel):
-    def __init__(self):
-        super().__init__()
-        self.overrideredirect(True)
-        self.title("Loading...")
-        
-        logo_size = 394
-        splash_height = logo_size + 32
-        screen_width = self.winfo_screenwidth() 
-        screen_height = self.winfo_screenheight()
-        x = (screen_width // 2) - (logo_size // 2)
-        y = (screen_height // 2) - (splash_height // 2)
-        self.geometry(f"{logo_size}x{splash_height}+{x}+{y}")
-        my_image = ctk.CTkImage(dark_image=Image.open(os.path.join("images", "logo.png")), size=(logo_size,logo_size))
-        my_label = ctk.CTkLabel(self, text="Loading...", image=my_image).pack()
-        self. progress = ctk.CTkProgressBar(self, width=logo_size-32, height=16, progress_color="red", fg_color="#101010")
-        self.progress.pack(pady=8)
-        self._set(0)
-
-    def step(self, value):
-        value = value / 100
-        self._set(self.progress.get()+value) 
-
-    def _set(self, value):
-        self.progress.set(value) 
-        self.update()
-
 #%% SLImTAG main class
 class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        
         self.appearance_mode = tk.StringVar(self, value="dark")
         
+        # hide main window and open splash screen
         self.withdraw();
-        
         splash = SplashScreen()
 
         self.title("SLImTAG")
@@ -241,6 +216,8 @@ class SegmentationApp(ctk.CTk):
         # mouse position for events that need it
         self.mouse = {'x': None, 'y': None}
         
+        splash.step(10)
+        
         # tools
         self.tools = ["brush", "eraser", "polygon", "bbox", "cut", "clean", "bucket", "undo",
                       "smooth", "fill", "denoise", "interpolate",
@@ -253,8 +230,6 @@ class SegmentationApp(ctk.CTk):
         self.tool_active = {tool: False for tool in self.tools}
         # tools icons
         self.tool_icon = {}
-
-        splash.step(10) 
         
         for tool in self.tools:
             # TODO change wirh f"images/buttons/{tool}_light_on.png"
@@ -318,7 +293,7 @@ class SegmentationApp(ctk.CTk):
         self.b3_pressed = False
         self.mid_pressed = False
         
-        splash.step(10) 
+        splash.step(10)
         
         
         # dictionary for icons
@@ -341,7 +316,7 @@ class SegmentationApp(ctk.CTk):
                                                                   size=(16, 16))
                                          }
         
-        splash.step(5) 
+        splash.step(5)
         
         
         #%% Top Menu
@@ -517,14 +492,13 @@ class SegmentationApp(ctk.CTk):
         self.mask_list_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=(0, 5))
         self.mask_list_frame._scrollbar.configure(height=0) # https://stackoverflow.com/a/76957827
         
+        splash.step(15) 
+        
         #%% Right panel: Tools options
         # Frame for tool options
         self.tool_opt_container = ctk.CTkScrollableFrame(self.right_panel, corner_radius=0)
         self.tool_opt_container.grid(row=2, column=0, sticky="nsew", padx=0, pady=5)
         self.tool_opt_container.grid_columnconfigure(0, weight=1)
-        
-        splash.step(15) 
-        
         
         self.tool_opt_frame = {}
         
@@ -551,12 +525,11 @@ class SegmentationApp(ctk.CTk):
         for tool in self.tool_opt_frame:
             self.tool_opt_frame[tool].grid_columnconfigure(0, weight=1)
         
-        splash.step(20) 
-        
-        
         # set empty frame at start
         self.current_tool_frame = None
         self.show_tool_frame("empty")
+        
+        splash.step(20)
         
         # Brush options
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
@@ -648,13 +621,12 @@ class SegmentationApp(ctk.CTk):
         self.smooth_dilation_slider.set(self.smooth_n_dilations)
         self.smooth_dilation_slider.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
 
+        splash.step(10)
+
         #%% Right panel: Navigation
         self.navigation_frame = ctk.CTkFrame(self.right_panel, fg_color="transparent")
         self.navigation_frame.grid(row=3, column=0, sticky="n", padx=10, pady=(5, 10))
 
-        splash.step(10) 
-        
-        
         self.sub_canvas_frames = {}
         
         image_only_frame = ctk.CTkFrame(self.navigation_frame)#, fg_color="transparent")
@@ -706,7 +678,7 @@ class SegmentationApp(ctk.CTk):
         self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
         self.zoom_label.grid(row=0, column=6, sticky="e", padx=10)
 
-        splash.step(10) 
+        splash.step(10)
         
         
         #%% SAM
@@ -807,8 +779,11 @@ class SegmentationApp(ctk.CTk):
         # set appearance mode
         self.toggle_appearance()
         
-        # Finally, set status to "Ready"
+        # Finally, set status to "Ready" and raise back main window
         self.set_status("ready", "Ready")
+        splash.withdraw()
+        self.update_idletasks()
+        self.deiconify()
 
 
         #%% TODO old code to be repurposed, DO NOT REMOVE UNTIL IMPLEMENTED BACK
@@ -827,9 +802,7 @@ class SegmentationApp(ctk.CTk):
         # self.next_image_btn.configure(state="disabled")
         
         # self.images_in_folder_frame.grid_columnconfigure([0, 1], weight=1)
-        splash.withdraw()
-        self.update_idletasks()
-        self.deiconify()
+
 
     #%% AUX methods
     # Async method for efficient SAM loading

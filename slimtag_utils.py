@@ -793,4 +793,29 @@ class Tooltip():
             tw.destroy()
         self.tw = None
 
+class SplashScreen(ctk.CTkToplevel):
+    def __init__(self):
+        super().__init__()
+        self.overrideredirect(True)
+        self.title("Loading...")
+        
+        logo_size = 394
+        splash_height = logo_size + 32
+        screen_width = self.winfo_screenwidth() 
+        screen_height = self.winfo_screenheight()
+        x = (screen_width // 2) - (logo_size // 2)
+        y = (screen_height // 2) - (splash_height // 2)
+        self.geometry(f"{logo_size}x{splash_height}+{x}+{y}")
+        my_image = ctk.CTkImage(dark_image=Image.open(os.path.join("images", "logo.png")), size=(logo_size,logo_size))
+        ctk.CTkLabel(self, text="Loading...", image=my_image).pack()
+        self. progress = ctk.CTkProgressBar(self, width=logo_size-32, height=16, progress_color="red", fg_color="#101010")
+        self.progress.pack(pady=8)
+        self._set(0)
 
+    def step(self, value):
+        value = value / 100
+        self._set(self.progress.get()+value) 
+
+    def _set(self, value):
+        self.progress.set(value) 
+        self.update()
