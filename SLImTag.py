@@ -150,7 +150,7 @@ class SplashScreen(ctk.CTkToplevel):
         x = (screen_width // 2) - (logo_size // 2)
         y = (screen_height // 2) - (splash_height // 2)
         self.geometry(f"{logo_size}x{splash_height}+{x}+{y}")
-        my_image = ctk.CTkImage(dark_image=Image.open('images/logo.png'), size=(logo_size,logo_size))
+        my_image = ctk.CTkImage(dark_image=Image.open(os.path.join("images", "logo.png")), size=(logo_size,logo_size))
         my_label = ctk.CTkLabel(self, text="Loading...", image=my_image).pack()
         self. progress = ctk.CTkProgressBar(self, width=logo_size-32, height=16, progress_color="red", fg_color="#101010")
         self.progress.pack(pady=8)
