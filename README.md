@@ -1,3 +1,23 @@
+# WARNING: DEMO and Current GUI status
+The GUI has undergone a total restyling to make it more suitable for demo presentations and intensive usage in a more professional context.
+Therefore, several already working features (including *non-neural segmentation methods*, *modules*, and *Bayesian updates*) have been temporarily disabled. We are currently re-integrating them, and we expect to merge the older working version with the current one before the 15th of April.
+
+However, the current version is a fully functioning interface with a novel graphical aspect and a highly efficient, analytically reference-based patching mechanism, combined with standard brushing, cleaning, smoothing, and Neural Network Segmentation features.
+
+
+
+Particular focus on:
+- [ ] Integrate non-neural methods [Gdc]
+- [ ] Integrate existing *load* nrrd, nifti, etc. modules [Gdc]
+- [ ] Upload (already tested) Bayesian module [Gdc]
+- [ ] Change existing 3D visualization to ease the read on biomedical settings [Op]
+- [ ] Tooltip hover [Op]
+- [ ] Preview multipoint improvement [Op]
+- [ ] Re-activate exitings tools in the novel graphical interface [All]
+- [ ] Define boundaries visualization [Fv]
+- [ ] Load fex example images/nrrds
+
+
 # SLImTAG – Simple Light-weight Image TAGging tool
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
@@ -211,3 +231,4 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 - [ ] Import MedSAM and modify the MagicWand wrapper
 - [ ] Import also .nrrd and .nifti files for MRI/scan segmentation
 - [ ] Allows to import 3D (i.e., ordered list of 2D elements) views for 3D MRI scans and video segmentation
+- [ ] Anonymization tool (integrated in save as nrrd/nifti) *or* in the load button
