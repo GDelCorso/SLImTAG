@@ -138,7 +138,7 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 | ![Magic wand](images/doc/buttons/wand.png) **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
 | ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
 | ![Clean](images/doc/buttons/clean.png) **Clean** | Select/remove connected areas      | – | Keep only connected component | – |
-| ![Smoothing](images/doc/buttons/smooth.png) **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> | Dilate                     | Erode                         |
+| ![Smoothing](images/doc/buttons/smooth.png) **Smoothing**           | Smooth component boundary   | <kbd>S</kbd> | Erode, then dilate                  | Dilate, then erode                         |
 
 Options available for each tool appear on the right side of the interface, under the masks list.
 
