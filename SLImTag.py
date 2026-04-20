@@ -159,8 +159,7 @@ class SegmentationApp(ctk.CTk):
         # current image preview (in sub canvas)
         self.current_preview_canvas = None
         self.preview_scale = 1.0
-        # Matrices of hidden and locked masks
-        self.mask_hidden = None
+        # Matrix of locked masks
         self.mask_locked = None
         
         # aux display variables
@@ -909,20 +908,18 @@ class SegmentationApp(ctk.CTk):
         
         # create new mask view and populate
         cut_mask_orig = np.zeros((self.view_h, self.view_w), dtype=self.mask_orig.dtype)
-        cut_mask_hidden = np.full((self.view_h, self.view_w), False)
         try:
             cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
-            cut_mask_hidden[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_hidden[top:bottom, left:right]
         except ValueError: # in case we are out of image limits, in this case keep empty mask
             pass
-        # TODO this makes update_display SLOWER
         
         # TODO: if self.mask_outline.get(): change overlay as border only
         # else: do as below
         # create overlay object and convert it to be pasted on canvas
         overlay = np.zeros((self.view_h, self.view_w, 4), np.uint8)
         for mid, c in self.mask_colors.items():
-            overlay[(cut_mask_orig==mid)&(~cut_mask_hidden)] = [*c, self.mask_opacity]
+            if not self.mask_widgets[mid].hidden:
+                overlay[cut_mask_orig==mid] = [*c, self.mask_opacity]
         self.mask_pil = Image.fromarray(overlay)
         resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
         self.tk_ov = ImageTk.PhotoImage(resized)
@@ -1038,7 +1035,7 @@ class SegmentationApp(ctk.CTk):
         Saves a copy of the current mask (mask_orig) into the undo_stack.
         '''
         if self.mask_orig is not None:
-            self.undo_stack.append((self.mask_orig.copy(), self.mask_hidden.copy(), self.mask_locked.copy()))
+            self.undo_stack.append(self.mask_orig.copy())
             if len(self.undo_stack) > UNDO_DEPTH:
                 self.undo_stack.pop(0)
 
@@ -1053,7 +1050,8 @@ class SegmentationApp(ctk.CTk):
             return
         
         if self.undo_stack:
-            self.mask_orig, self.mask_hidden, self.mask_locked = self.undo_stack.pop()
+            self.mask_orig = self.undo_stack.pop()
+            self.update_lock()
             self.update_display(update_all="Mask")
 
 
@@ -1251,7 +1249,6 @@ class SegmentationApp(ctk.CTk):
         # change mid mask hidden status to set_hide
         self.mask_widgets[mid].hidden = set_hide
         self.mask_widgets[mid].hide.configure(image=self.icons_dict["EyeClosed" if set_hide else "EyeOpen"]["normal"])
-        self.mask_hidden[self.mask_orig==mid] = set_hide
         # if all the statuses of the single masks are the same, change the "all" button as well
         all_statuses = set([self.mask_widgets[m].hidden for m in list(self.mask_labels.keys())])
         if len(all_statuses) == 1:
@@ -1293,6 +1290,16 @@ class SegmentationApp(ctk.CTk):
             mask_ids = list(self.mask_labels.keys())
             for mid in mask_ids:
                 self.toggle_mask_lock(mid, set_lock)
+    
+    def update_lock(self):
+        # update self.mask_locked with current locked masks
+        if self.mask_orig is None:
+            return
+        self.mask_locked = np.full(self.mask_orig.shape, False)
+        mask_ids = list(self.mask_labels.keys())
+        for mid in mask_ids:
+            if self.mask_widgets[mid].locked:
+                self.mask_locked[self.mask_orig==mid] = True
 
     #%% LOAD & SAVE METHODS
     def load_image(self, path=None, add_mask=True):
@@ -1336,9 +1343,7 @@ class SegmentationApp(ctk.CTk):
         self.orig_w, self.orig_h = img.size
         self.image_orig = img
         self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
-
-        self.mask_hidden = np.full((self.orig_h, self.orig_w), False)
-        self.mask_locked = np.full((self.orig_h, self.orig_w), False)
+        self.mask_locked = np.full(self.mask_orig.shape, False)
         
         self.update_title()
         # Async load of the SAM model to avoid freezed interface
@@ -1626,8 +1631,8 @@ class SegmentationApp(ctk.CTk):
         if (self.tool_active["brush"] or self.tool_active["eraser"]) and check_inside_image:
             x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
-            self.brush_at(x, y, add=(self.tool_active["brush"] and not shift_pressed))
             self.push_undo()
+            self.brush_at(x, y, add=(self.tool_active["brush"] and not shift_pressed))
             self.update_display(update_all="Mask")
             self.draw_brush_preview(e)
             return
@@ -1968,7 +1973,6 @@ class SegmentationApp(ctk.CTk):
         # Slice of the mask corresponding to the bounding box
         mask_area = self.mask_orig[y0:y1, x0:x1]
         lock_area = self.mask_locked[y0:y1, x0:x1]
-        hide_area = self.mask_hidden[y0:y1, x0:x1]
         
         if add:
             # Paint only on non-locked pixels
@@ -1979,11 +1983,9 @@ class SegmentationApp(ctk.CTk):
             erase_mask = circle & (mask_area == self.active_mask_id)
             mask_area[erase_mask] = 0
         
-        # Update hidden & locked status
+        # Update locked status
         # only on slices for performance
-        hide_area[mask_area==self.active_mask_id] = self.mask_widgets[self.active_mask_id].hidden
         lock_area[mask_area==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
-        hide_area[mask_area==0] = False
         lock_area[mask_area==0] = False
         # Mark mask as modified for later saving or GUI update
         self.set_modified(True)
@@ -2084,10 +2086,8 @@ class SegmentationApp(ctk.CTk):
         self.sam_pt_labels = []
         self.set_modified(True)
         self.canvas.delete("sam_pt")
-        # Update hidden & locked status
-        self.mask_hidden[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].hidden
+        # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
-        self.mask_hidden[self.mask_orig==0] = False
         self.mask_locked[self.mask_orig==0] = False
         self.update_display(update_all="Mask")
         self.set_status("ready", "Ready")
@@ -2154,10 +2154,8 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig[(self.mask_orig==self.active_mask_id) & (~comp)] = 0
         
         self.set_modified(True)
-        # Update hidden & locked status
-        self.mask_hidden[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].hidden
+        # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
-        self.mask_hidden[self.mask_orig==0] = False
         self.mask_locked[self.mask_orig==0] = False
         self.update_display(update_all="Mask")
         
@@ -2196,10 +2194,8 @@ class SegmentationApp(ctk.CTk):
         self.mask_orig[comp_smooth & (comp|(~self.mask_locked))] = self.active_mask_id
         
         self.set_modified(True)
-        # Update hidden & locked status
-        self.mask_hidden[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].hidden
+        # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
-        self.mask_hidden[self.mask_orig==0] = False
         self.mask_locked[self.mask_orig==0] = False
         self.update_display(update_all="Mask")
         self.set_status("ready", "Ready")
