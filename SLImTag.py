@@ -326,7 +326,8 @@ class SegmentationApp(ctk.CTk):
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
-        image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F")
+        #image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F")
+        # TODO reactivate import folder
         self.topmenu_items["image"] = image_menu
         self.menu_bar.add_cascade(label="Image", menu=image_menu)
 
@@ -679,8 +680,8 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-Z>", lambda e: self.undo())
         self.bind("<Control-I>", lambda e: self.load_image())
         self.bind("<Control-i>", lambda e: self.load_image())
-        self.bind("<Control-F>", lambda e: self.load_folder())
-        self.bind("<Control-f>", lambda e: self.load_folder())
+        #self.bind("<Control-F>", lambda e: self.load_folder()) # TODO reactivate load folder
+        #self.bind("<Control-f>", lambda e: self.load_folder())
         self.bind("<Control-S>", lambda e: self.save_mask(switch_fast=True))
         self.bind("<Control-s>", lambda e: self.save_mask(switch_fast=True))
         self.bind("<Control-q>", lambda e: self.quit_program())
