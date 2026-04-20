@@ -1,6 +1,6 @@
 # WARNING: DEMO and Current GUI status
 The GUI has undergone a total restyling to make it more suitable for demo presentations and intensive usage in a more professional context.
-Therefore, several already working features (including *non-neural segmentation methods*, *modules*, and *Bayesian updates*) have been temporarily disabled. We are currently re-integrating them, and we expect to merge the older working version with the current one before the 15th of April.
+Therefore, several already working features (including *non-neural segmentation methods*, *modules*, and *Bayesian updates*) have been temporarily disabled. We are currently re-integrating them, and we expect to merge the older working version with the current one before the 15th of May.
 
 However, the current version is a fully functioning interface with a novel graphical aspect and a highly efficient, analytically reference-based patching mechanism, combined with standard brushing, cleaning, smoothing, and Neural Network Segmentation features.
 
@@ -107,28 +107,25 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 
 ## Usage
 
-![Interface](images/gui.png)
-
 ### Import Images
 
-The first step is to load an image (in PNG or JPG) using `Image > Import image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut. Alternatively, it is possible to choose `Image > Import folder` to load all PNG and JPG images of a folder; in this case, images are shown one at a time in alphabetical order, and a click on the `Next image` button (or the <kbd>.</kbd> shortcut) will advance to the next image. Moreover, current masks will _always_ be saved after a click on `Next image` or when the program is closed.
+The first step is to load an image (in PNG or JPG) using `Image > Import image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut.
 
 ### Mask Actions
 
-Use the `Add new mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear in a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9. <kbd>Tab</kbd> (respectively <kbd>Shift</kbd>+<kbd>Tab</kbd>) cycles through the masks, selecting the next (respectively previous) one as active.
+Use the `+ New mask` button (shortcut: <kbd>N</kbd>) to create a new mask with a custom label. Up to 20 masks can be defined for a file. The current masks appear in a list below the button, and the active mask will be highlighted. Click on a mask to make it the active one. Keys <kbd>1</kbd>–<kbd>9</kbd> (not on the numeric pad) are shortcuts for masks with IDs 1–9. <kbd>Tab</kbd> (respectively <kbd>Shift</kbd>+<kbd>Tab</kbd>) cycles through the masks, selecting the next (respectively previous) one as active.
 
-Click on the small `×` button next to a mask to remove ALL the regions marked with it, and also remove the mask from the list. The active mask can be also removed via the menu `Mask > Clear active mask`. ALL masks can be removed via `Mask > Clear all masks`. **Any "clear mask" action cannot be undone.**
+Click on the small `×` button next to a mask to remove ALL the regions marked with it, and also remove the mask from the list. The active mask can be also removed via the menu `Mask > Clear active mask`. ALL masks can be removed via `Mask > Clear all masks` or the `×` button on top of the masks list. **Any "clear mask" action cannot be undone.**
 
 Right-clicking on a mask opens a contextual menu with the options to edit the mask (i.e., change its name and/or color), delete it, or set it as the active mask.
 
-`Mask > Save mask` (shortcut: <kbd>Ctrl</kbd>+<kbd>S</kbd>) saves the mask as an indexed PNG file with its default name and position:
-
-- for single images, the mask will have the same name as the original image with `_mask` appended, and will be placed in the same folder;
-- for folders, any mask will be saved with the same name as the original image in a folder named `<Folder>_mask` (where `<Folder>` is the name of the folder containing the images). **Please note that `<Folder>_mask` will be overwritten if already existing upon loading `<Folder>`.**
-
-`Mask > Save mask as...` instead allows the user to choose a name and position for the mask.
+`Mask > Save mask` (shortcut: <kbd>Ctrl</kbd>+<kbd>S</kbd>) saves the mask as an indexed PNG file with its default name and position, namely, the mask will have the same name as the original image with `_mask` appended, and will be placed in the same folder. `Mask > Save mask as...` instead allows the user to choose a name and position for the mask.
 
 `Mask > Load mask` loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
+
+The `Hide mask` (eye icon) and `Lock mask` (padlock) icons for each mask respectively hide and lock the corresponding mask. A hidden mask won't be displayed in the interface (but it will be saved). A locked mask cannot be overwritten by _other_ masks (but can be modified if it is the active mask). The icons on top of the list correspond to `Hide all masks`/`Lock all masks` functions.
+
+Mask opacity can be regulated through the slider on the bottom of the interface.
 
 ### Buttons
 
@@ -136,14 +133,14 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 
 | Button / Tool           | Description                        | Shortcut     | Left click                 | Right click                   |
 | ----------------------- | ---------------------------------- | ------------ | -------------------------- | ----------------------------- |
-| **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
-| **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
-| **Connected component** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
-| **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> | Dilate                     | Erode                         |
+| ![Brush](images/doc/buttons/brush.png) **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
+| ![Eraser](images/doc/buttons/eraser.png) **Eraser**               | Erase manually            | – | Erase                      | –                         |
+| ![Magic wand](images/doc/buttons/wand.png) **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
+| ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
+| ![Clean](images/doc/buttons/clean.png) **Clean** | Select/remove connected areas      | – | Keep only connected component | – |
+| ![Smoothing](images/doc/buttons/smooth.png) **Smoothing**           | Dilate/erode selected component    | <kbd>S</kbd> | Dilate                     | Erode                         |
 
-The slider under the `Brush` button determines the size of the brush.
-
-By default, tools act on the mask layer by overriding the content. The "Only add on empty" checkbox prevents this behaviour by allowing tools only to apply the active mask on regions where there are no other masks.
+Options available for each tool appear on the right side of the interface, under the masks list.
 
 ### Mouse Actions
 
