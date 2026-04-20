@@ -2265,12 +2265,16 @@ class SegmentationApp(ctk.CTk):
         
         if operation == "dilation":
             for _ in range(self.smooth_iter):
-                comp_smooth = binary_erosion(comp_smooth, structure=struct, iterations=self.smooth_n_erosions)
-                comp_smooth = binary_dilation(comp_smooth, structure=struct, iterations=self.smooth_n_dilations)
+                if self.smooth_n_erosions > 0:
+                    comp_smooth = binary_erosion(comp_smooth, structure=struct, iterations=self.smooth_n_erosions)
+                if self.smooth_n_dilations > 0:
+                    comp_smooth = binary_dilation(comp_smooth, structure=struct, iterations=self.smooth_n_dilations)
         elif operation == "erosion":
             for _ in range(self.smooth_iter):
-                comp_smooth = binary_dilation(comp_smooth, structure=struct, iterations=self.smooth_n_dilations)
-                comp_smooth = binary_erosion(comp_smooth, structure=struct, iterations=self.smooth_n_erosions)
+                if self.smooth_n_dilations > 0:
+                    comp_smooth = binary_dilation(comp_smooth, structure=struct, iterations=self.smooth_n_dilations)
+                if self.smooth_n_erosions > 0:
+                    comp_smooth = binary_erosion(comp_smooth, structure=struct, iterations=self.smooth_n_erosions)
         else:
             return
 
