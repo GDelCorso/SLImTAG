@@ -28,7 +28,7 @@ from PIL import Image, ImageDraw, ImageTk
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 import customtkinter as ctk
 
 # Custom utils
@@ -133,20 +133,53 @@ else:
 #ctk.set_appearance_mode("System")   # System theme
 #ctk.set_appearance_mode("dark") # force dark mode for testing
 ctk.set_default_color_theme("color_palette.json") # CTK color theme
+ctk.set_appearance_mode("dark")
 
 HIGHLIGHT_COLOR = ctk.ThemeManager.theme["CTkButton"]["border_color"]
+
+class SplashScreen(ctk.CTkToplevel):
+    def __init__(self):
+        super().__init__()
+        self.overrideredirect(True)
+        self.title("Loading...")
+        
+        logo_size = 394
+        splash_height = logo_size + 32
+        screen_width = self.winfo_screenwidth() 
+        screen_height = self.winfo_screenheight()
+        x = (screen_width // 2) - (logo_size // 2)
+        y = (screen_height // 2) - (splash_height // 2)
+        self.geometry(f"{logo_size}x{splash_height}+{x}+{y}")
+        my_image = ctk.CTkImage(dark_image=Image.open('images/logo.png'), size=(logo_size,logo_size))
+        my_label = ctk.CTkLabel(self, text="Loading...", image=my_image).pack()
+        self. progress = ctk.CTkProgressBar(self, width=logo_size-32, height=16, progress_color="red", fg_color="#101010")
+        self.progress.pack(pady=8)
+        self._set(0)
+
+    def step(self, value):
+        value = value / 100
+        self._set(self.progress.get()+value) 
+
+    def _set(self, value):
+        self.progress.set(value) 
+        self.update()
 
 #%% SLImTAG main class
 class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.appearance_mode = tk.StringVar(self, value="dark")
+        
+        self.withdraw();
+        
+        splash = SplashScreen()
+
         self.title("SLImTAG")
         self.geometry("1300x900")
         self.iconphoto(False, ImageTk.PhotoImage(file=os.path.join("images", "main_icon.png")))
         
         # TODO move set_appearance_mode to preferences window
         # optionsmenu "dark", "light" with default value: "dark"
-        self.appearance_mode = tk.StringVar(self, value="dark")
         
         #%% Attributes
         
@@ -218,6 +251,9 @@ class SegmentationApp(ctk.CTk):
         self.tool_active = {tool: False for tool in self.tools}
         # tools icons
         self.tool_icon = {}
+
+        splash.step(10) 
+        
         for tool in self.tools:
             # TODO change wirh f"images/buttons/{tool}_light_on.png"
             self.tool_icon[tool] = {"normal": ctk.CTkImage(light_image=Image.open(f"images/buttons/{tool}_light_on.png").convert("RGBA"),
@@ -274,6 +310,9 @@ class SegmentationApp(ctk.CTk):
         self.b3_pressed = False
         self.mid_pressed = False
         
+        splash.step(10) 
+        
+        
         # dictionary for icons
         self.icons_dict = {}
         for img in ["Eye", "Lock"]:
@@ -293,6 +332,9 @@ class SegmentationApp(ctk.CTk):
                                                                   dark_image=Image.open(f"images/icons/{img}_dark_off.png").convert("RGBA"),
                                                                   size=(16, 16))
                                          }
+        
+        splash.step(5) 
+        
         
         #%% Top Menu
         self.menu_bar = tk.Menu(self)
@@ -469,6 +511,9 @@ class SegmentationApp(ctk.CTk):
         self.tool_opt_container.grid(row=2, column=0, sticky="nsew", padx=0, pady=5)
         self.tool_opt_container.grid_columnconfigure(0, weight=1)
         
+        splash.step(15) 
+        
+        
         self.tool_opt_frame = {}
         
         empty_frame = ctk.CTkFrame(self.tool_opt_container, fg_color="transparent")
@@ -493,6 +538,9 @@ class SegmentationApp(ctk.CTk):
         
         for tool in self.tool_opt_frame:
             self.tool_opt_frame[tool].grid_columnconfigure(0, weight=1)
+        
+        splash.step(20) 
+        
         
         # set empty frame at start
         self.current_tool_frame = None
@@ -562,6 +610,9 @@ class SegmentationApp(ctk.CTk):
         self.navigation_frame = ctk.CTkFrame(self.right_panel, fg_color="transparent")
         self.navigation_frame.grid(row=3, column=0, sticky="n", padx=10, pady=(5, 10))
 
+        splash.step(10) 
+        
+        
         self.sub_canvas_frames = {}
         
         image_only_frame = ctk.CTkFrame(self.navigation_frame)#, fg_color="transparent")
@@ -613,12 +664,18 @@ class SegmentationApp(ctk.CTk):
         self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
         self.zoom_label.grid(row=0, column=6, sticky="e", padx=10)
 
+        splash.step(10) 
+        
+        
         #%% SAM
         device = "cuda" if torch.cuda.is_available() else "cpu"
         sam = sam_model_registry[MODEL_TYPE](checkpoint=MODEL_WEIGHTS_PATH)
         sam.to(device).eval()
         self.sam = SamPredictor(sam)
 
+        splash.step(20) 
+        
+        
         # Define the asynchronous mechanism to speed up image loading
         self.switch_computed_magic_wand = False     # True if SAM is loaded
         self.thread = None                          # Threading variable
@@ -711,6 +768,7 @@ class SegmentationApp(ctk.CTk):
         # Finally, set status to "Ready"
         self.set_status("ready", "Ready")
 
+
         #%% TODO old code to be repurposed, DO NOT REMOVE UNTIL IMPLEMENTED BACK
         # Images in folder navigation frame
         # TODO move in main_canvas frame
@@ -727,7 +785,9 @@ class SegmentationApp(ctk.CTk):
         # self.next_image_btn.configure(state="disabled")
         
         # self.images_in_folder_frame.grid_columnconfigure([0, 1], weight=1)
-        
+        splash.withdraw()
+        self.update_idletasks()
+        self.deiconify()
 
     #%% AUX methods
     # Async method for efficient SAM loading
