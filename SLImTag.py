@@ -32,7 +32,9 @@ from tkinter import filedialog, ttk
 import customtkinter as ctk
 
 # Custom utils
-from slimtag_utils import MultiButtonDialog, MaskEditDialog, PreprocessingAdjustments, adjust_image
+from slimtag_utils import MultiButtonDialog, MaskEditDialog
+from slimtag_utils import PreprocessingAdjustments, adjust_image
+from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
 # Torch and SAM (Segment anything model)
@@ -444,19 +446,19 @@ class SegmentationApp(ctk.CTk):
         # Buttons
         # TODO all commands, in particular add the "right-click" that are a different tool now
         # I ould keep the right-click behaviour in any case (for "pro users")
-        self.create_tool_button("brush", 0, 0, 0)
-        self.create_tool_button("eraser", 0, 0, 1)
+        self.create_tool_button("brush", 0, 0, 0, help_text="Brush [B]")
+        self.create_tool_button("eraser", 0, 0, 1, help_text="Eraser")
         self.create_tool_button("polygon", 0, 1, 0)
         self.create_tool_button("bbox", 0, 1, 1)
-        self.create_tool_button("cut", 0, 2, 0)
-        self.create_tool_button("clean", 0, 2, 1)
+        self.create_tool_button("cut", 0, 2, 0, help_text="Cut component [C]")
+        self.create_tool_button("clean", 0, 2, 1, help_text="Keep component")
         self.create_tool_button("bucket", 0, 3, 0, last_row=True)
-        self.create_tool_button("undo", 0, 3, 1, command=self.undo, last_row=True)
-        self.create_tool_button("smooth", 1, 0, 0)
+        self.create_tool_button("undo", 0, 3, 1, command=self.undo, last_row=True, help_text="Undo [Ctrl-Z]")
+        self.create_tool_button("smooth", 1, 0, 0, help_text="Smooth [S]")
         self.create_tool_button("fill", 1, 0, 1)
         self.create_tool_button("denoise", 1, 1, 0, last_row=True)
         self.create_tool_button("interpolate", 1, 1, 1, last_row=True)
-        self.create_tool_button("wand", 2, 0, 0)
+        self.create_tool_button("wand", 2, 0, 0, help_text="Magic wand [M]")
         self.create_tool_button("wand_all", 2, 0, 1)
         self.create_tool_button("wand_multi", 2, 1, 0, None, last_row=True)
         self.create_tool_button("wand_box", 2, 1, 1, None, last_row=True)
@@ -479,6 +481,7 @@ class SegmentationApp(ctk.CTk):
                                           anchor="w",
                                           fg_color="transparent",
                                           command=self.add_mask)
+        Tooltip(self.new_mask_btn, text="Add new mask [N]")
         self.new_mask_btn.grid(row=0, column=0, sticky="w", padx=(10, 5), pady=5)
         self.hide_all_mask_btn = ctk.CTkButton(self.mask_controls_frame, text="",
                                                image=self.icons_dict["EyeOpen"]["disabled"],
@@ -488,6 +491,7 @@ class SegmentationApp(ctk.CTk):
                                                command=lambda: self.toggle_all_masks_hide(not self.hide_all_mask_btn.hidden))
         self.hide_all_mask_btn.grid(row=0, column=2, sticky="ew", padx=(5, 2), pady=5)
         self.hide_all_mask_btn.hidden = False
+        Tooltip(self.hide_all_mask_btn, text="Hide all masks")
         self.lock_all_mask_btn = ctk.CTkButton(self.mask_controls_frame, text="",
                                           image=self.icons_dict["LockOpen"]["disabled"],
                                           width=34, height=34,
@@ -496,6 +500,7 @@ class SegmentationApp(ctk.CTk):
                                           command=lambda: self.toggle_all_masks_lock(not self.lock_all_mask_btn.locked))
         self.lock_all_mask_btn.grid(row=0, column=3, sticky="ew", padx=2, pady=5)
         self.lock_all_mask_btn.locked = False
+        Tooltip(self.lock_all_mask_btn, text="Lock all masks")
         self.clear_all_mask_btn = ctk.CTkButton(self.mask_controls_frame, text="×",
                                   font=ctk.CTkFont(size=24, weight="bold"),
                                   width=34, height=34,
@@ -505,6 +510,7 @@ class SegmentationApp(ctk.CTk):
         self.clear_all_mask_btn.bind("<Enter>", lambda e: self.clear_all_mask_btn.configure(fg_color="#AB2B22", text_color="white"))
         self.clear_all_mask_btn.bind("<Leave>", lambda e: self.clear_all_mask_btn.configure(fg_color="transparent", text_color="#AB2B22"))
         self.clear_all_mask_btn.grid(row=0, column=4, sticky="ew", padx=(2, 23), pady=5)
+        Tooltip(self.clear_all_mask_btn, text="Clear all masks")
         
         # ScrollFrame for mask list
         self.mask_list_frame = ctk.CTkScrollableFrame(self.right_panel, corner_radius=0, height=100)
@@ -582,6 +588,7 @@ class SegmentationApp(ctk.CTk):
         self.wand_model_menu = ctk.CTkOptionMenu(self.tool_opt_frame["wand"], values=["SAM (ViT-B)"], command=None) # TODO
         self.wand_model_menu.set("SAM (ViT-B)")
         self.wand_model_menu.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
+        Tooltip(self.wand_model_menu, text="Magic wand method")
         
         self.wand_adj_frame = ctk.CTkFrame(self.tool_opt_frame["wand"], border_width=1)
         self.wand_adj_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=(10, 0))
@@ -599,8 +606,10 @@ class SegmentationApp(ctk.CTk):
         self.wand_auto_update = ctk.CTkButton(self.wand_adj_frame, text="Auto", image=self.icons_dict["AutoUpdate"]["disabled"], command=None)
         self.wand_auto_update.grid(row=4, column=1, sticky="ew", padx=(5, 10), pady=(3,10))
         self.wand_auto_update.configure(state='disabled') # TODO implement auto update
+        Tooltip(self.wand_auto_update, text="Auto compute preprocessing parameters")
         self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual", image=self.icons_dict["ManualUpdate"]["disabled"], command=self.manual_wand_preprocessing)
         self.wand_manual_update.grid(row=4, column=0, sticky="ew", padx=(10, 5), pady=(3,10))
+        Tooltip(self.wand_manual_update, text="Select preprocessing parameters")
         
         self.wand_adj_frame.grid_columnconfigure([0, 1], weight=1)
         
@@ -1086,7 +1095,7 @@ class SegmentationApp(ctk.CTk):
         self.lock_all_mask_btn.configure(state=state, image=self.icons_dict["LockOpen"][state])
 
     #%% TOOL BUTTONS
-    def create_tool_button(self, tool, btn_frame, row, col, command=None, last_row=False):
+    def create_tool_button(self, tool, btn_frame, row, col, command=None, last_row=False, help_text=''):
         """
         Aux function to create button object from tool
         """
@@ -1099,6 +1108,7 @@ class SegmentationApp(ctk.CTk):
         padx = (4, 2) if col == 0 else (2, 4) # col == 1
         pady = (4 if row == 0 else 2, 4 if last_row else 2)
         self.tool_btn[tool].grid(row=row, column=col, sticky="nsew", padx=padx, pady=pady)
+        self.tool_btn[tool].help = Tooltip(self.tool_btn[tool], text=help_text)
     
     def toggle_tool(self, tool):
         if not self.image_is_loaded():
@@ -1219,6 +1229,7 @@ class SegmentationApp(ctk.CTk):
                                         command=lambda: self.toggle_mask_hide(mid, not mask_frame.hidden))
         mask_frame.hide.grid(row=0, column=2, padx=(5,2), pady=5)
         mask_frame.hidden = False
+        Tooltip(mask_frame.hide, text="Hide mask")
         mask_frame.lock = ctk.CTkButton(mask_frame, text="",
                                         image=self.icons_dict["LockOpen"]["normal"],
                                         width=34, height=34,
@@ -1226,6 +1237,7 @@ class SegmentationApp(ctk.CTk):
                                         command=lambda: self.toggle_mask_lock(mid, not mask_frame.locked))
         mask_frame.lock.grid(row=0, column=3, padx=2, pady=5)
         mask_frame.locked = False
+        Tooltip(mask_frame.lock, text="Lock mask")
         clear_btn = ctk.CTkButton(mask_frame, text="×",
                                   font=ctk.CTkFont(size=24, weight="bold"),
                                   width=34, height=34,
@@ -1235,6 +1247,7 @@ class SegmentationApp(ctk.CTk):
         clear_btn.grid(row=0, column=4, padx=(2,5), pady=5)
         clear_btn.bind("<Enter>", lambda e: clear_btn.configure(fg_color="#AB2B22", text_color="white"))
         clear_btn.bind("<Leave>", lambda e: clear_btn.configure(fg_color="transparent", text_color="#AB2B22"))
+        Tooltip(clear_btn, text="Clear mask")
         mask_frame.grid_columnconfigure(1, weight=1)
         mask_frame.bind("<Button-1>", lambda e: self.change_mask(mid))
         mask_frame.bind("<Button-3>", lambda e: self.update_mask(e, mid))
