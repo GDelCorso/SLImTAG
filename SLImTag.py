@@ -148,7 +148,7 @@ class SegmentationApp(ctk.CTk):
         self.appearance_mode = tk.StringVar(self, value="dark")
         
         # hide main window and open splash screen
-        self.withdraw();
+        self.withdraw()
         splash = SplashScreen()
 
         self.title("SLImTAG")
@@ -393,8 +393,12 @@ class SegmentationApp(ctk.CTk):
         # Main canvas
         # TODO different frames with different widgets depending on load type
         # e.g. previous/next image for folder, slider with z-axis for medical...
-        self.canvas = ctk.CTkCanvas(self, bg="black", highlightthickness=0)
-        self.canvas.grid(row=0, column=1, sticky="nsew")
+        self.main_canvas_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_canvas_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_canvas_frame.grid_rowconfigure(0, weight=1)
+        self.main_canvas_frame.grid_columnconfigure(0, weight=1)
+        self.canvas = ctk.CTkCanvas(self.main_canvas_frame, bg="black", highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
         
         # Right panel for masks
         self.right_panel = ctk.CTkFrame(self, width=panels_width)
@@ -1202,7 +1206,6 @@ class SegmentationApp(ctk.CTk):
                                         command=lambda: self.toggle_mask_hide(mid, not mask_frame.hidden))
         mask_frame.hide.grid(row=0, column=2, padx=(5,2), pady=5)
         mask_frame.hidden = False
-        Tooltip(mask_frame.hide, text="Hide mask")
         mask_frame.lock = ctk.CTkButton(mask_frame, text="",
                                         image=self.icons_dict["LockOpen"]["normal"],
                                         width=34, height=34,
@@ -1210,7 +1213,6 @@ class SegmentationApp(ctk.CTk):
                                         command=lambda: self.toggle_mask_lock(mid, not mask_frame.locked))
         mask_frame.lock.grid(row=0, column=3, padx=2, pady=5)
         mask_frame.locked = False
-        Tooltip(mask_frame.lock, text="Lock mask")
         clear_btn = ctk.CTkButton(mask_frame, text="×",
                                   font=ctk.CTkFont(size=24, weight="bold"),
                                   width=34, height=34,
@@ -1220,7 +1222,6 @@ class SegmentationApp(ctk.CTk):
         clear_btn.grid(row=0, column=4, padx=(2,5), pady=5)
         clear_btn.bind("<Enter>", lambda e: clear_btn.configure(fg_color="#AB2B22", text_color="white"))
         clear_btn.bind("<Leave>", lambda e: clear_btn.configure(fg_color="transparent", text_color="#AB2B22"))
-        Tooltip(clear_btn, text="Clear mask")
         mask_frame.grid_columnconfigure(1, weight=1)
         mask_frame.bind("<Button-1>", lambda e: self.change_mask(mid))
         mask_frame.bind("<Button-3>", lambda e: self.update_mask(e, mid))
