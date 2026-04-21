@@ -768,6 +768,7 @@ class Tooltip():
 
         # creates a toplevel window
         self.tw = tk.Toplevel(widget)
+        self.tw.withdraw() # hide until composed
 
         # Leaves only the label and removes the app window
         self.tw.wm_overrideredirect(True)
@@ -777,7 +778,6 @@ class Tooltip():
                              text=self.text,
                              justify="left",
                              fg_color=bg)
-
         label.grid(padx=(pad[0], pad[2]),
                    pady=(pad[1], pad[3]),
                    sticky="nsew")
@@ -786,6 +786,7 @@ class Tooltip():
         x, y = tip_pos_calculator(widget, label)
         self.tw.update_idletasks()
         self.tw.geometry(f"{win.winfo_width()-(win.winfo_width()%2)}x{win.winfo_height()}+{x}+{y}")
+        self.tw.deiconify()
 
     def hide(self):
         tw = self.tw
