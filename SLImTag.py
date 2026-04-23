@@ -175,6 +175,8 @@ class SegmentationApp(ctk.CTk):
         # aux display variables
         self.mask_pil = None
         self.tk_ov = None
+        self.sam_preview_pil = None
+        self.tk_sam_preview = None
         
         # to keep track of resizing window
         self.resizing_event = None
@@ -280,6 +282,7 @@ class SegmentationApp(ctk.CTk):
         # SAM management
         self.sam_points = []
         self.sam_pt_labels = []
+        self.sam_preview = None # boolean matrix for multipoint SAM preview
         
         # SAM preprocessing (for sliders: range -100 .. 100)
         self.wand_brightness = 0
@@ -999,11 +1002,32 @@ class SegmentationApp(ctk.CTk):
         overlay = np.zeros((self.view_h, self.view_w, 4), np.uint8)
         for mid, c in self.mask_colors.items():
             if not self.mask_widgets[mid].hidden:
-                overlay[cut_mask_orig==mid] = [*c, self.mask_opacity]
+                overlay[cut_mask_orig==mid] = [*c, self.mask_opacity if len(self.sam_points) == 0 else (self.mask_opacity // 3)]
         self.mask_pil = Image.fromarray(overlay)
         resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
         self.tk_ov = ImageTk.PhotoImage(resized)
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+        
+        # if SAM is active, create also multipoint preview
+        if any(self.tool_active[tool] for tool in ["wand", "wand_multi"]):
+            # create new mask view and populate
+            cut_mask_preview = np.full((self.view_h, self.view_w), False)
+            try:
+                cut_mask_preview[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.sam_preview[top:bottom, left:right]
+            except ValueError: # in case we are out of image limits, in this case keep empty mask
+                pass
+            
+            # TODO: if self.mask_outline.get(): change overlay as border only
+            # but maybe not for SAM preview?
+            # create overlay object and convert it to be pasted on canvas
+            overlay_prev = np.zeros((self.view_h, self.view_w, 4), np.uint8)
+            if not self.mask_widgets[self.active_mask_id].hidden:
+                overlay_prev[cut_mask_preview] = [*self.mask_colors[self.active_mask_id], (2 * self.mask_opacity) // 3]
+            self.sam_preview_pil = Image.fromarray(overlay_prev)
+            resized_prev = self.sam_preview_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+            self.tk_sam_preview = ImageTk.PhotoImage(resized_prev)
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_sam_preview, tag="mask")
+            
         
         # raise back SAM multipoints if any
         self.canvas.tag_raise("sam_pt")
@@ -1108,7 +1132,6 @@ class SegmentationApp(ctk.CTk):
         
         if tool in ["brush", "eraser"]:
             self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
-    
     
     #%% UNDO
     def push_undo(self):
@@ -1425,6 +1448,7 @@ class SegmentationApp(ctk.CTk):
         self.image_orig = img
         self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
         self.mask_locked = np.full(self.mask_orig.shape, False)
+        self.sam_preview = np.full(self.mask_orig.shape, False)
         
         self.update_title()
         # Async load of the SAM model to avoid freezed interface
@@ -1621,6 +1645,9 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig = mask
             if unique_colors:
                 self.change_mask(target_id=1)
+        
+        # prepare empty mask with same size for SAM preview
+        self.sam_preview = np.full(self.mask_orig.shape, False)
 
         self.toggle_all_masks_hide(set_hide=False, enabled=True)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
@@ -1707,6 +1734,10 @@ class SegmentationApp(ctk.CTk):
         
         if self.tool_active["wand"] and check_inside_image:
             self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
+            return
+        
+        if self.tool_active["wand_multi"] and check_inside_image:
+            self.sam_add_point(e, add=not shift_pressed, multipoint=True)
             return
         
         if (self.tool_active["brush"] or self.tool_active["eraser"]) and check_inside_image:
@@ -2111,10 +2142,7 @@ class SegmentationApp(ctk.CTk):
         x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         self.sam_points.append([x, y])
-        if not multipoint:
-            self.sam_pt_labels.append(1)
-            self.sam_apply(add=add, multipoint=multipoint)
-        else:
+        if multipoint:
             self.sam_pt_labels.append(1 if add else 0)
             if add:
                 # fg point: fill with active mask color, outline black
@@ -2125,8 +2153,61 @@ class SegmentationApp(ctk.CTk):
                 pt_fill = "black"
                 pt_out = "#" + "".join([f"{255-c:02x}" for c in self.mask_colors[self.active_mask_id]])
             self.canvas.create_oval(e.x-3, e.y-3, e.x+3, e.y+3, fill=pt_fill, outline=pt_out, width=1, tag="sam_pt")
+            self.sam_compute(multipoint=True)
+        else:
+            self.sam_pt_labels.append(1)
+            self.sam_compute(multipoint=False)
+            self.sam_apply(add=add)
 
-    
+    def sam_compute(self, multipoint=False):
+        """
+        Use SAM points and labels lists to compute mask, and store it in the
+        preview matrix.
+        
+        multipoint determines if one or three masks are computed
+        """
+        if (self.image_orig is None) or (self.active_mask_id is None) or (not self.sam_points):
+            return
+        self.set_status("loading", "SAM computing...")
+            
+        masks, scores, _ = self.sam.predict(np.array(self.sam_points),
+                                            np.array(self.sam_pt_labels),
+                                            multimask_output=not multipoint,
+                                            return_logits=True)
+
+        masks = expit(masks) > self.wand_threshold
+        i = np.argmax(scores)
+        self.sam_preview[masks[i] & (~self.mask_locked)] = True
+        
+        if multipoint: # to show preview
+            self.update_display(update_all="Mask")
+        self.set_status("ready", "Ready")
+
+    def sam_apply(self, add=True, cancel=False):
+        """
+        Apply the mask in SAM_preview to definitive mask, and empty SAM points
+        and labels lists.
+        
+        If cancel=True, don't apply the computed mask and only empty SAM infos.
+        """
+        if self.image_orig is None or self.active_mask_id is None:
+            return
+        if not cancel:
+            self.push_undo()
+            if add:
+                self.mask_orig[self.sam_preview] = self.active_mask_id
+            else:
+                self.mask_orig[self.sam_preview & (self.mask_orig==self.active_mask_id)] = 0
+            self.set_modified(True)
+        self.sam_preview = np.full(self.mask_orig.shape, False) # reset preview
+        self.sam_points = []
+        self.sam_pt_labels = []
+        self.canvas.delete("sam_pt")
+        # Update locked status (we don't use self.update_lock() for performances)
+        self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
+        self.mask_locked[self.mask_orig==0] = False
+        self.update_display(update_all="Mask")
+
     def sam_apply_release(self):
         """
         Event bound to the release of the "Multipoint" key
@@ -2134,44 +2215,7 @@ class SegmentationApp(ctk.CTk):
         # TODO check other active tools
         if (not self.tool_active["wand"]) or (not self.sam_points): # empty lists are false
             return
-        self.sam_apply(multipoint=True)
-
-    def sam_apply(self, add=True, multipoint=False):
-        """
-        Use the SAM to generate a mask depending on the information stored in
-        self.sam_points and self.sam_pt_labels.
-        
-        If add is True, the mask will be added; otherwise, it will be removed.
-        If multipoint is True, add is ignored and the mask will be added.
-        """
-        if self.image_orig is None or self.active_mask_id is None:
-            return
-        self.set_status("loading", "SAM computing...")
-        self.push_undo()
-        masks, _, _ = self.sam.predict(np.array(self.sam_points),
-                                       np.array(self.sam_pt_labels),
-                                       multimask_output=False,
-                                       return_logits=True)
-        
-        masks = expit(masks) > self.wand_threshold
-        
-        if not multipoint:
-            if add:
-                self.mask_orig[masks[0] & (~self.mask_locked)] = self.active_mask_id
-            else:
-                self.mask_orig[masks[0] & (self.mask_orig==self.active_mask_id)] = 0
-        else:
-            self.mask_orig[masks[0] & (~self.mask_locked)] = self.active_mask_id
-
-        self.sam_points = []
-        self.sam_pt_labels = []
-        self.set_modified(True)
-        self.canvas.delete("sam_pt")
-        # Update locked status (we don't use self.update_lock() for performances)
-        self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
-        self.mask_locked[self.mask_orig==0] = False
-        self.update_display(update_all="Mask")
-        self.set_status("ready", "Ready")
+        self.sam_apply(add=True) # multipoint only adds mask
 
     def manual_wand_preprocessing(self):
         values = PreprocessingAdjustments(self).values
