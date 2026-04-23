@@ -283,6 +283,9 @@ class SegmentationApp(ctk.CTk):
         self.sam_points = []
         self.sam_pt_labels = []
         self.sam_preview = None # boolean matrix for multipoint SAM preview
+        # to store IDs of <Return> and <Escape> events for multipoint SAM tool
+        self.sam_bind_enter = None
+        self.sam_bind_esc = None
         
         # SAM preprocessing (for sliders: range -100 .. 100)
         self.wand_brightness = 0
@@ -442,7 +445,7 @@ class SegmentationApp(ctk.CTk):
         self.create_tool_button("interpolate", 1, 1, 1, last_row=True)
         self.create_tool_button("wand", 2, 0, 0, help_text="Magic wand [M]")
         self.create_tool_button("wand_all", 2, 0, 1)
-        self.create_tool_button("wand_multi", 2, 1, 0, None, last_row=True)
+        self.create_tool_button("wand_multi", 2, 1, 0, last_row=True, help_text="Multipoint magic wand")
         self.create_tool_button("wand_box", 2, 1, 1, None, last_row=True)
         self.create_tool_button("ruler", 3, 0, 0, None, last_row=True)
         self.create_tool_button("area", 3, 0, 1, None,last_row=True)
@@ -1070,7 +1073,7 @@ class SegmentationApp(ctk.CTk):
         # TODO remove tool from 'always disabled' list when the corresponding function has been implemented
         always_disabled = ["polygon", "bbox", "bucket",
                            "fill", "denoise", "interpolate",
-                           "wand_all", "wand_multi", "wand_box",
+                           "wand_all", "wand_box",
                            "ruler", "area",
                            "custom_1", "custom_2", "custom_3", "custom_4"]
         for tool in always_disabled:
@@ -1132,6 +1135,18 @@ class SegmentationApp(ctk.CTk):
         
         if tool in ["brush", "eraser"]:
             self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+        
+        # bind <Return> and <Escape> for multipoint wand only
+        if tool == "wand_multi":
+            self.sam_bind_enter = self.bind("<Return>", self.sam_apply)
+            self.sam_bind_esc = self.bind("<Escape>", lambda e: self.sam_apply(cancel=True))
+        else:
+            # remove potential existing points
+            self.sam_apply(cancel=True)
+            if self.sam_bind_enter is not None:
+                self.unbind("<Return>", self.sam_bind_enter)
+            if self.sam_bind_esc is not None:
+                self.unbind("<Escape>", self.sam_bind_esc)
     
     #%% UNDO
     def push_undo(self):
@@ -1151,6 +1166,10 @@ class SegmentationApp(ctk.CTk):
         '''
         # Check if an image is loaded
         if not self.image_is_loaded():
+            return
+        
+        # Deactivate undo when using multipoint wand
+        if len(self.sam_points) > 0:
             return
         
         if self.undo_stack:
