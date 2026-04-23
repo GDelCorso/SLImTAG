@@ -222,7 +222,7 @@ class MaskEditDialog(ctk.CTkToplevel):
         self.wheel_dim = self._apply_window_scaling(WIDTH - 50)
         # dimension of inner SL canvas relative to wheel
         # the original wheel has a dimension of 1000 px and the width of the annulus is 100 px
-        self.inner_dim = self._apply_window_scaling(int(self.wheel_dim * 0.8 / math.sqrt(2)))
+        self.inner_dim = int(self.wheel_dim * 0.8 / math.sqrt(2))
         # dimension of crosshair for color selection
         self.target_dim = self._apply_window_scaling(21)
         
