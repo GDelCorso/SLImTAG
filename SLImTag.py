@@ -792,7 +792,7 @@ class SegmentationApp(ctk.CTk):
         # Finally, set status to "Ready" and raise back main window
         self.set_status("ready", "Ready")
         splash.withdraw()
-        self.update_idletasks()
+        self.update()
         self.deiconify()
 
 
