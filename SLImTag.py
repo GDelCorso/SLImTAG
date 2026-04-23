@@ -2357,4 +2357,10 @@ class SegmentationApp(ctk.CTk):
 
 #%% Main cycle
 if __name__ == "__main__":
+    
+    # Fix HiDPI awareness on Windows
+    if os.name == "nt":
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    
     SegmentationApp().mainloop()
