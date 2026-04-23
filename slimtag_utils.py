@@ -794,11 +794,12 @@ class Tooltip():
             tw.destroy()
         self.tw = None
 
-class SplashScreen(ctk.CTkToplevel):
+class SplashScreen(tk.Toplevel):
     def __init__(self):
         super().__init__()
         self.overrideredirect(True)
         self.title("Loading...")
+        self.configure(bg="black")
         
         logo_size = 394
         splash_height = logo_size + 32
