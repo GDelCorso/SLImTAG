@@ -974,7 +974,7 @@ class SegmentationApp(ctk.CTk):
         
         self.zoom_label_var.set(f"Zoom: {round(100*self.zoom)}%")
 
-        if update_all == "Global":
+        if update_all == "Global": # Used by zoom and pan
             # remove old info
             self.canvas.delete("background_image","mask")
             # create new image view and paste it on canvas
@@ -982,58 +982,169 @@ class SegmentationApp(ctk.CTk):
                                              .resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
             self.tk_img = ImageTk.PhotoImage(self.image_disp)
             self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img, tag="background_image")
-        elif update_all == "Mask":
-            # delete only the mask to speed up computations
-            self.canvas.delete("mask")
-        
-        # compute new mask view margins
-        top = max(0, self.view_y)
-        bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
-        left = max(0,self.view_x)
-        right = min(max(self.view_x+self.view_w,0), self.orig_w)
-        
-        # create new mask view and populate
-        cut_mask_orig = np.zeros((self.view_h, self.view_w), dtype=self.mask_orig.dtype)
-        try:
-            cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
-        except ValueError: # in case we are out of image limits, in this case keep empty mask
-            pass
-        
-        # TODO: if self.mask_outline.get(): change overlay as border only
-        # else: do as below
-        # create overlay object and convert it to be pasted on canvas
-        overlay = np.zeros((self.view_h, self.view_w, 4), np.uint8)
-        for mid, c in self.mask_colors.items():
-            if not self.mask_widgets[mid].hidden:
-                overlay[cut_mask_orig==mid] = [*c, self.mask_opacity if len(self.sam_points) == 0 else (self.mask_opacity // 3)]
-        self.mask_pil = Image.fromarray(overlay)
-        resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
-        self.tk_ov = ImageTk.PhotoImage(resized)
-        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
-        
-        # if SAM is active, create also multipoint preview
-        if any(self.tool_active[tool] for tool in ["wand", "wand_multi"]):
+            
             # create new mask view and populate
-            cut_mask_preview = np.full((self.view_h, self.view_w), False)
+            self.cut_mask_orig = np.zeros((self.view_h, self.view_w), dtype=self.mask_orig.dtype)
+            
+            # compute new mask view margins
+            top = max(0, self.view_y)
+            bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
+            left = max(0,self.view_x)
+            right = min(max(self.view_x+self.view_w,0), self.orig_w)
+            
             try:
-                cut_mask_preview[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.sam_preview[top:bottom, left:right]
+                self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
             except ValueError: # in case we are out of image limits, in this case keep empty mask
                 pass
             
-            # TODO: if self.mask_outline.get(): change overlay as border only
-            # but maybe not for SAM preview?
-            # create overlay object and convert it to be pasted on canvas
-            overlay_prev = np.zeros((self.view_h, self.view_w, 4), np.uint8)
-            if not self.mask_widgets[self.active_mask_id].hidden:
-                overlay_prev[cut_mask_preview] = [*self.mask_colors[self.active_mask_id], (2 * self.mask_opacity) // 3]
-            self.sam_preview_pil = Image.fromarray(overlay_prev)
-            resized_prev = self.sam_preview_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
-            self.tk_sam_preview = ImageTk.PhotoImage(resized_prev)
-            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_sam_preview, tag="mask")
+            # Alpha channels 
+            lut = [0]+255*[self.mask_opacity] 
+             
+            # Hide hidden masks
+            for mid in self.mask_colors:
+                if self.mask_widgets[mid].hidden:
+                    lut[mid] = 0 
             
+            self.mask_pil = Image.fromarray(self.cut_mask_orig, mode="P")
+            
+            resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+            
+            alpha_mask =  resized.point(lut, mode="L")
+            
+            
+            palette = [0, 0, 0] * 256  # index 0 = background nero
+            for mid, color in self.mask_colors.items():
+                palette[mid*3:mid*3+3] = list(color)
+                
+            resized.putpalette(palette)
+            resized = resized.convert("RGB")
+            
+            # Warning: this is the computational bottlenck. If single value mask is applied (same alpha everywhere) this is fine.
+            resized.putalpha(alpha_mask) 
         
-        # raise back SAM multipoints if any
-        self.canvas.tag_raise("sam_pt")
+            self.tk_ov = ImageTk.PhotoImage(resized)
+            
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+            
+            # raise back SAM multipoints if any
+            self.canvas.tag_raise("sam_pt")
+            
+        elif update_all == "Mask": # Used by mask tools
+            # delete only the mask to speed up computations
+            self.canvas.delete("mask")
+            
+            # compute new mask view margins
+            top = max(0, self.view_y)
+            bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
+            left = max(0,self.view_x)
+            right = min(max(self.view_x+self.view_w,0), self.orig_w)
+            
+            try:
+                self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
+            except ValueError: # in case we are out of image limits, in this case keep empty mask
+                pass
+            
+            # Alpha channels 
+            lut = [0]+255*[self.mask_opacity] 
+             
+            # Hide hidden masks
+            for mid in self.mask_colors:
+                if self.mask_widgets[mid].hidden:
+                    lut[mid] = 0 
+            
+            self.mask_pil = Image.fromarray(self.cut_mask_orig, mode="P")
+            
+            resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+            
+            alpha_mask =  resized.point(lut, mode="L")
+            
+            
+            palette = [0, 0, 0] * 256  # index 0 = background nero
+            for mid, color in self.mask_colors.items():
+                palette[mid*3:mid*3+3] = list(color)
+                
+            resized.putpalette(palette)
+            resized = resized.convert("RGB")
+            
+            # Warning: this is the computational bottlenck. If single value mask is applied (same alpha everywhere) this is fine.
+            resized.putalpha(alpha_mask) 
+            
+            self.tk_ov = ImageTk.PhotoImage(resized)
+            
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+            
+            # raise back SAM multipoints if any
+            self.canvas.tag_raise("sam_pt")
+            
+        elif update_all == "Mask Local":
+            # delete only the mask to speed up computations
+            self.canvas.delete("mask")
+            
+            # compute new mask view margins
+            top = max(0, self.view_y)
+            bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
+            left = max(0,self.view_x)
+            right = min(max(self.view_x+self.view_w,0), self.orig_w)
+            
+            try:
+                self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
+            except ValueError: # in case we are out of image limits, in this case keep empty mask
+                pass
+            
+            
+            
+            # Alpha channels TODO - Correct hidden mask
+            # lut = [0]+255*[self.mask_opacity] 
+             
+            # # Hide hidden masks
+            # for mid in self.mask_colors:
+            #     if self.mask_widgets[mid].hidden:
+            #         lut[mid] = 0 
+            
+            # We must substitute each 0 value with the cut_orig image - ALSO if they belongs to hidden mask
+            
+            self.mask_pil = Image.fromarray(self.cut_mask_orig, mode="P")
+            
+            
+            resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+
+    
+            hidden_values_list = [0]+[mid for mid in self.mask_colors if self.mask_widgets[mid].hidden]
+            binary_mask = Image.fromarray(
+                (np.isin(np.array(resized),hidden_values_list)).astype("uint8") * 255,
+                mode="L")
+    
+            
+            palette = [0, 0, 0] * 256  # index 0 = background nero
+            for mid, color in self.mask_colors.items():
+                palette[mid*3:mid*3+3] = list(color)
+                
+            resized.putpalette(palette)
+            resized = resized.convert("RGB")
+            
+            # Warning: this is the computational bottlenck. If single value mask is applied (same alpha everywhere) this is fine.
+            # resized.putalpha(255) 
+            resized.putalpha(self.mask_opacity) 
+            
+    
+            
+            
+            # binary_mask = Image.fromarray(
+            #     (np.array(resized.convert("L")) == 0).astype("uint8") * 255,
+            #     mode="L"
+            # )
+            
+            # Resized is a RGBA mask of size equal to the canvas
+            resized = Image.composite(self.image_disp,resized, binary_mask)
+            
+            
+            
+            self.tk_ov = ImageTk.PhotoImage(resized)
+            
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+            
+            # raise back SAM multipoints if any
+            self.canvas.tag_raise("sam_pt")
     
     def update_mask_opacity(self, v):
         self.mask_opacity = v
@@ -1832,7 +1943,7 @@ class SegmentationApp(ctk.CTk):
             self._prev_brush_pos = (x1, y1)
             self.push_undo() # TODO: Check problem for undo
             self.brush_at(x1, y1, add=(self.tool_active["brush"] and not shift_pressed))
-            self.update_display(update_all="Mask")
+            self.update_display(update_all="Mask Local")
             self.draw_brush_preview(e)
             
             return
@@ -1855,7 +1966,7 @@ class SegmentationApp(ctk.CTk):
                 yi = int(y0 + dy * i / dist)
                 self.brush_at(xi, yi, add=(self.tool_active["brush"] and not shift_pressed))
 
-            self.update_display(update_all="Mask") # update only mask
+            self.update_display(update_all="Mask Local") # update only mask
             self.draw_brush_preview(e)
             self._last_brush_update = now
             self._prev_brush_pos = (x1, y1)
