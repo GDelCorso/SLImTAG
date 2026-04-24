@@ -211,6 +211,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 #### Magic wand
 
 - [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
+- [ ] When apllying zoom during SAM-preview multipoints the markers follow the user perspective
 
 #### Smoothing
 
