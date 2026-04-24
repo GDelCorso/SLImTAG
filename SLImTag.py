@@ -1197,20 +1197,35 @@ class SegmentationApp(ctk.CTk):
         '''
         Enable/disable all buttons.
         '''
+
         state = "normal" if enabled else "disabled"
-        for tool in self.tool_btn:
-            self.tool_btn[tool].configure(state=state, image=self.tool_icon[tool][state])
-        if not self.switch_computed_magic_wand:
-            for tool in ["wand", "wand_all", "wand_multi", "wand_box"]:
-                self.tool_btn[tool].configure(state="disabled", image=self.tool_icon[tool]["disabled"])
-        # TODO remove tool from 'always disabled' list when the corresponding function has been implemented
-        always_disabled = ["polygon", "bbox", "bucket",
-                           "fill", "denoise", "interpolate",
-                           "wand_all", "wand_box",
-                           "ruler", "area",
-                           "custom_1", "custom_2", "custom_3", "custom_4"]
-        for tool in always_disabled:
-            self.tool_btn[tool].configure(state="disabled", image=self.tool_icon[tool]["disabled"])
+
+        def simultaneous_apply():
+            for tool, btn in self.tool_btn.items():
+                btn.configure(state=state, image=self.tool_icon[tool][state])
+    
+            if not self.switch_computed_magic_wand:
+                for tool in ["wand", "wand_all", "wand_multi", "wand_box"]:
+                    self.tool_btn[tool].configure(
+                        state="disabled",
+                        image=self.tool_icon[tool]["disabled"]
+                    )
+            # TODO: deactivate the hard-coded always disabled
+            always_disabled = [
+                "polygon", "bbox", "bucket",
+                "fill", "denoise", "interpolate",
+                "wand_all", "wand_box",
+                "ruler", "area",
+                "custom_1", "custom_2", "custom_3", "custom_4"
+            ]
+    
+            for tool in always_disabled:
+                self.tool_btn[tool].configure(
+                    state="disabled",
+                    image=self.tool_icon[tool]["disabled"]
+                )
+    
+        self.left_panel.after_idle(simultaneous_apply)
     
     def set_hide_lock_all_btns(self, enabled: bool, propagate=True):
         '''
