@@ -1072,7 +1072,8 @@ class SegmentationApp(ctk.CTk):
             self.tk_ov = ImageTk.PhotoImage(resized)
             
             self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
-            
+     
+           
             # raise back SAM multipoints if any
             self.canvas.tag_raise("sam_pt")
             
@@ -1140,8 +1141,29 @@ class SegmentationApp(ctk.CTk):
             
             
             self.tk_ov = ImageTk.PhotoImage(resized)
-            
             self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+            
+                   
+        # if SAM is active, create also multipoint preview
+        if any(self.tool_active[tool] for tool in ["wand", "wand_multi"]):
+            # create new mask view and populate
+            cut_mask_preview = np.full((self.view_h, self.view_w), False)
+            try:
+                cut_mask_preview[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.sam_preview[top:bottom, left:right]
+            except ValueError: # in case we are out of image limits, in this case keep empty mask
+                pass
+            
+            # TODO: if self.mask_outline.get(): change overlay as border only
+            # but maybe not for SAM preview?
+            # create overlay object and convert it to be pasted on canvas
+            overlay_prev = np.zeros((self.view_h, self.view_w, 4), np.uint8)
+            if not self.mask_widgets[self.active_mask_id].hidden:
+                overlay_prev[cut_mask_preview] = [*self.mask_colors[self.active_mask_id], (2 * self.mask_opacity) // 3]
+            self.sam_preview_pil = Image.fromarray(overlay_prev)
+            resized_prev = self.sam_preview_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+            self.tk_sam_preview = ImageTk.PhotoImage(resized_prev)
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_sam_preview, tag="mask")
+            
             
             # raise back SAM multipoints if any
             self.canvas.tag_raise("sam_pt")
