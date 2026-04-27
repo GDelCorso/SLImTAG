@@ -136,7 +136,6 @@ else:
 #ctk.set_appearance_mode("System")   # System theme
 #ctk.set_appearance_mode("dark") # force dark mode for testing
 ctk.set_default_color_theme("color_palette.json") # CTK color theme
-ctk.set_appearance_mode("dark")
 
 HIGHLIGHT_COLOR = ctk.ThemeManager.theme["CTkButton"]["border_color"]
 
@@ -146,7 +145,8 @@ class SegmentationApp(ctk.CTk):
         super().__init__()
         
         self.appearance_mode = tk.StringVar(self, value="dark")
-        
+        ctk.set_appearance_mode(self.appearance_mode.get())        
+
         # hide main window and open splash screen
         self.withdraw()
         splash = SplashScreen()
@@ -166,20 +166,23 @@ class SegmentationApp(ctk.CTk):
         # Displayed image and mask
         self.image_disp = None
         self.mask_disp = None
+        # blended image+mask for fast pan&zoom
+        self.blended = None
         # current image preview (in sub canvas)
         self.current_preview_canvas = None
         self.preview_scale = 1.0
         # Matrix of locked masks
         self.mask_locked = None
-        
+
         # aux display variables
-        self.mask_pil = None
         self.tk_ov = None
         self.sam_preview_pil = None
         self.tk_sam_preview = None
         
-        # to keep track of resizing window
+        # to keep track of delayed events
         self.resizing_event = None
+        self.zoom_event_id = None
+        self.update_opacity_id = None
         
         # boolean switch to check if mask is modified and not saved
         # TODO: for multiple images import
@@ -676,7 +679,7 @@ class SegmentationApp(ctk.CTk):
         self.mask_opacity_slider.grid(row=0, column=1, sticky="ew", padx=(0, 10))
         ctk.CTkLabel(self.mask_appearance_frame, text="Fill", anchor="e").grid(row=0, column=2, sticky="ew", padx=(0, 10))
         self.mask_outline_switch = ctk.CTkSwitch(self.mask_appearance_frame, text="Outline", variable=self.mask_outline,
-                                                 command=lambda: self.update_display(update_all="Mask"))
+                                                 command=lambda: self.update_display(update_image=False))
         self.mask_outline_switch.grid(row=0, column=3, sticky="ew", padx=(0, 10))
         self.mask_outline_switch.configure(state="disabled") # TODO remove when implemented
         
@@ -848,7 +851,7 @@ class SegmentationApp(ctk.CTk):
             self.next_image_btn.configure(state="normal")
             
         # Refresh and update display
-        self.update_display()
+        self.update_display(update_image=True)
     
     def quit_program(self):
         """
@@ -961,7 +964,7 @@ class SegmentationApp(ctk.CTk):
         self.current_preview_canvas.create_rectangle(x, y, x+w, y+h, outline=HIGHLIGHT_COLOR, width=2, tag="rectangle")
     
     #%% UPDATE DISPLAY
-    def update_display(self, update_all="Global"):
+    def update_display(self, update_image=True, update_blended=True):
         '''
         Aux method to update display whenever a change occurs.
         
@@ -973,8 +976,11 @@ class SegmentationApp(ctk.CTk):
             return
         
         self.zoom_label_var.set(f"Zoom: {round(100*self.zoom)}%")
-
-        if update_all == "Global": # Used by zoom and pan
+        
+        # clean canvas if coming after pan & zoom events
+        self.canvas.delete("preview_image")
+        
+        if update_image:
             # remove old info
             self.canvas.delete("background_image","mask")
             # create new image view and paste it on canvas
@@ -982,168 +988,56 @@ class SegmentationApp(ctk.CTk):
                                              .resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
             self.tk_img = ImageTk.PhotoImage(self.image_disp)
             self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img, tag="background_image")
+        else:
+            # delete only the mask to speed up computations
+            self.canvas.delete("mask")
             
-            # create new mask view and populate
-            self.cut_mask_orig = np.zeros((self.view_h, self.view_w), dtype=self.mask_orig.dtype)
-            
-            # compute new mask view margins
-            top = max(0, self.view_y)
-            bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
-            left = max(0,self.view_x)
-            right = min(max(self.view_x+self.view_w,0), self.orig_w)
-            
-            try:
-                self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
-            except ValueError: # in case we are out of image limits, in this case keep empty mask
-                pass
-            
-            # Alpha channels 
-            lut = [0]+255*[self.mask_opacity] 
-             
-            # Hide hidden masks
-            for mid in self.mask_colors:
-                if self.mask_widgets[mid].hidden:
-                    lut[mid] = 0 
-            
-            self.mask_pil = Image.fromarray(self.cut_mask_orig, mode="P")
-            
-            resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
-            
-            alpha_mask =  resized.point(lut, mode="L")
-            
-            
-            palette = [0, 0, 0] * 256  # index 0 = background nero
-            for mid, color in self.mask_colors.items():
-                palette[mid*3:mid*3+3] = list(color)
-                
-            resized.putpalette(palette)
-            resized = resized.convert("RGB")
-            
-            # Warning: this is the computational bottlenck. If single value mask is applied (same alpha everywhere) this is fine.
-            resized.putalpha(alpha_mask) 
+        # compute new mask view margins
+        top = max(0, self.view_y)
+        bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
+        left = max(0,self.view_x)
+        right = min(max(self.view_x+self.view_w,0), self.orig_w)
         
-            self.tk_ov = ImageTk.PhotoImage(resized)
-            
-            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
-            
-            # raise back SAM multipoints if any
-            self.canvas.tag_raise("sam_pt")
-            
-        elif update_all == "Mask": # Used by mask tools
-            # delete only the mask to speed up computations
-            self.canvas.delete("mask")
-            
-            # compute new mask view margins
-            top = max(0, self.view_y)
-            bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
-            left = max(0,self.view_x)
-            right = min(max(self.view_x+self.view_w,0), self.orig_w)
-            
-            try:
-                self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
-            except ValueError: # in case we are out of image limits, in this case keep empty mask
-                pass
-            
-            # Alpha channels 
-            lut = [0]+255*[self.mask_opacity] 
-             
-            # Hide hidden masks
-            for mid in self.mask_colors:
-                if self.mask_widgets[mid].hidden:
-                    lut[mid] = 0 
-            
-            self.mask_pil = Image.fromarray(self.cut_mask_orig, mode="P")
-            
-            resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
-            
-            alpha_mask =  resized.point(lut, mode="L")
-            
-            
-            palette = [0, 0, 0] * 256  # index 0 = background nero
-            for mid, color in self.mask_colors.items():
-                palette[mid*3:mid*3+3] = list(color)
-                
-            resized.putpalette(palette)
-            resized = resized.convert("RGB")
-            
-            # Warning: this is the computational bottlenck. If single value mask is applied (same alpha everywhere) this is fine.
-            resized.putalpha(alpha_mask) 
-            
-            self.tk_ov = ImageTk.PhotoImage(resized)
-            
-            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
-     
-           
-            # raise back SAM multipoints if any
-            self.canvas.tag_raise("sam_pt")
-            
-        elif update_all == "Mask Local":
-            # delete only the mask to speed up computations
-            self.canvas.delete("mask")
-            
-            # compute new mask view margins
-            top = max(0, self.view_y)
-            bottom = min(max(self.view_y+self.view_h, 0), self.orig_h)
-            left = max(0,self.view_x)
-            right = min(max(self.view_x+self.view_w,0), self.orig_w)
-            
-            try:
-                self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
-            except ValueError: # in case we are out of image limits, in this case keep empty mask
-                pass
-            
-            
-            
-            # Alpha channels TODO - Correct hidden mask
-            # lut = [0]+255*[self.mask_opacity] 
-             
-            # # Hide hidden masks
-            # for mid in self.mask_colors:
-            #     if self.mask_widgets[mid].hidden:
-            #         lut[mid] = 0 
-            
-            # We must substitute each 0 value with the cut_orig image - ALSO if they belongs to hidden mask
-            
-            self.mask_pil = Image.fromarray(self.cut_mask_orig, mode="P")
-            
-            
-            resized = self.mask_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+        self.cut_mask_orig = np.zeros((self.view_h, self.view_w), dtype=self.mask_orig.dtype)
+        try:
+            self.cut_mask_orig[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_orig[top:bottom, left:right]
+        except ValueError: # in case we are out of image limits, in this case keep empty mask
+            pass
+        
+        # resize new mask to canvas size (still in P mode for efficiency)
+        resized = Image.fromarray(self.cut_mask_orig, mode="P").resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
 
-    
-            hidden_values_list = [0]+[mid for mid in self.mask_colors if self.mask_widgets[mid].hidden]
-            binary_mask = Image.fromarray(
-                (np.isin(np.array(resized),hidden_values_list)).astype("uint8") * 255,
-                mode="L")
-    
-            
-            palette = [0, 0, 0] * 256  # index 0 = background nero
-            for mid, color in self.mask_colors.items():
-                palette[mid*3:mid*3+3] = list(color)
-                
-            resized.putpalette(palette)
-            resized = resized.convert("RGB")
-            
-            # Warning: this is the computational bottlenck. If single value mask is applied (same alpha everywhere) this is fine.
-            # resized.putalpha(255) 
-            resized.putalpha(self.mask_opacity) 
-            
-    
-            
-            
-            # binary_mask = Image.fromarray(
-            #     (np.array(resized.convert("L")) == 0).astype("uint8") * 255,
-            #     mode="L"
-            # )
-            
-            # Resized is a RGBA mask of size equal to the canvas
-            resized = Image.composite(self.image_disp,resized, binary_mask)
-            
-            
-            
-            self.tk_ov = ImageTk.PhotoImage(resized)
-            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
-            
-                   
+        # create BINARY matrix to encode background & hidden masks
+        # this is NOT an alpha channel with semi-transparency: too expensive
+        hidden_values_list = [0] + [mid for mid in self.mask_colors if self.mask_widgets[mid].hidden]
+        binary_mask = Image.fromarray((np.isin(np.array(resized), hidden_values_list)).astype("uint8") * 255, mode="L")
+
+        # now we can convert resized to RGB
+        palette = [0, 0, 0] * 256  # index 0 = black background
+        for mid, color in self.mask_colors.items():
+            palette[mid*3:mid*3+3] = list(color)
+        resized.putpalette(palette)
+        resized = resized.convert("RGB")
+        
+        # the trick: we put a UNIFORM alpha channel equal to the current mask opacity value
+        # a "true" alpha channel is the computational bottlenck, but a single-value channel is fine.
+        alpha = self.mask_opacity if len(self.sam_points) == 0 else (self.mask_opacity // 2)
+        resized.putalpha(alpha)
+        
+        # now we compose the image:
+        # - where binary_mask is 255, take from the FIRST image
+        #   (in this case, the original image with full opacity)
+        # - where binary_mask is 0, take from the SECOND image
+        #   (so mask at mask_opacity)
+        # this is fine since there is tk_img already drawn on the canvas
+        resized = Image.composite(self.image_disp, resized, binary_mask)
+        
+        self.tk_ov = ImageTk.PhotoImage(resized)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_ov, tag="mask")
+        
+        if self.blended is None or update_blended:
+            self.update_blended()
+
         # if SAM is active, create also multipoint preview
         if any(self.tool_active[tool] for tool in ["wand", "wand_multi"]):
             # create new mask view and populate
@@ -1156,26 +1050,79 @@ class SegmentationApp(ctk.CTk):
             # TODO: if self.mask_outline.get(): change overlay as border only
             # but maybe not for SAM preview?
             # create overlay object and convert it to be pasted on canvas
+            preview_alpha = max(min(int(self.mask_opacity + 0.35 * (255 - self.mask_opacity)), 255), 0)
             overlay_prev = np.zeros((self.view_h, self.view_w, 4), np.uint8)
             if not self.mask_widgets[self.active_mask_id].hidden:
-                overlay_prev[cut_mask_preview] = [*self.mask_colors[self.active_mask_id], (2 * self.mask_opacity) // 3]
+                overlay_prev[cut_mask_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
             self.sam_preview_pil = Image.fromarray(overlay_prev)
             resized_prev = self.sam_preview_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
             self.tk_sam_preview = ImageTk.PhotoImage(resized_prev)
             self.canvas.create_image(0, 0, anchor="nw", image=self.tk_sam_preview, tag="mask")
-            
-            
+
             # raise back SAM multipoints if any
-            self.canvas.tag_raise("sam_pt")
-    
+            self.display_wand_multipoints()
+
     def update_mask_opacity(self, v):
         self.mask_opacity = v
-        self.update_display(update_all="Mask")
+        self.update_display(update_image=False, update_blended=False)
+        if self.update_opacity_id is not None:
+            self.after_cancel(self.update_opacity_id)
+        # if still resizing, schedule a new event
+        self.update_opacity_id = self.after(300, lambda: self.update_display(update_image=False))
     
     def update_display_after_resize(self):
         self.view_h = int(self.canvas.winfo_height()/self.zoom)
         self.view_w = int(self.canvas.winfo_width()/self.zoom)
-        self.update_display(update_all="Global")
+        self.update_display(update_image=True)
+    
+    def update_blended(self):
+        """
+        Update blended RGB image for fast pan & zoom
+        """
+        mask_disp = Image.fromarray(self.mask_orig, mode="P")
+        palette = [0, 0, 0] * 256  # index 0 = black background
+        for mid, color in self.mask_colors.items():
+            palette[mid*3:mid*3+3] = list(color)
+        mask_disp.putpalette(palette)
+        mask_disp_rgb = mask_disp.convert("RGB")
+        
+        # create alpha mask
+        hidden_values_list = [0] + [mid for mid in self.mask_colors if self.mask_widgets[mid].hidden]
+        alpha_mask = Image.fromarray((1-np.isin(mask_disp, hidden_values_list).astype(np.uint8)) * self.mask_opacity)
+        mask_disp_rgb.putalpha(alpha_mask)
+        
+        # create composite image
+        self.blended = Image.alpha_composite(self.image_orig.convert("RGBA"), mask_disp_rgb).convert("RGB")
+    
+    def display_blended(self):
+        """
+        Show precomputed preview during pan & zoom events
+        """
+        self.canvas.delete("background_image","mask")
+        blended = self.blended.crop([self.view_x, self.view_y, self.view_x+self.view_w, self.view_y+self.view_h]) \
+                      .resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+        self.tk_img = ImageTk.PhotoImage(blended)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img, tag="preview_image")
+        self.display_wand_multipoints()
+    
+    def display_wand_multipoints(self):
+        self.canvas.delete("sam_pt")
+        cw = self.canvas.winfo_width()
+        ch = self.canvas.winfo_height()
+        for i in range(len(self.sam_points)):
+            x = int(((self.sam_points[i][0] - self.view_x) / self.view_w) * cw)
+            y = int(((self.sam_points[i][1] - self.view_y) / self.view_h) * ch)
+            if 0 <= x <= cw and 0 <= y <= ch:
+                if self.sam_pt_labels[i] == 1:
+                    # fg point: fill with active mask color, outline black
+                    pt_fill = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
+                    pt_out = "black"
+                else: # label == 0
+                    # bg point: fill black, use the inverted active mask color for outline
+                    pt_fill = "black"
+                    pt_out = "#" + "".join([f"{255-c:02x}" for c in self.mask_colors[self.active_mask_id]])
+                self.canvas.create_oval(x-3, y-3, x+3, y+3, fill=pt_fill, outline=pt_out, width=1, tag="sam_pt")
+        self.canvas.tag_raise("sam_pt")
 
     #%% UI TOOLS METHODS
     def show_tool_frame(self, tool):
@@ -1323,7 +1270,7 @@ class SegmentationApp(ctk.CTk):
         if self.undo_stack:
             self.mask_orig = self.undo_stack.pop()
             self.update_lock()
-            self.update_display(update_all="Mask")
+            self.update_display(update_image=False)
 
 
     #%% MASK MANAGEMENT
@@ -1470,7 +1417,7 @@ class SegmentationApp(ctk.CTk):
         if name != "":
             self.mask_labels[target_id] = name
             self.mask_widgets[target_id].lbl.configure(text=f"{target_id}: {self.mask_labels[target_id]}")
-        self.update_display(update_all="Mask")
+        self.update_display(update_image=False)
     
     def clear_mask(self, mid):
         '''
@@ -1503,7 +1450,7 @@ class SegmentationApp(ctk.CTk):
         
         if len(self.mask_labels) == 0 or self.active_mask_id is None: # disable all buttons if there are no masks
             self.set_controls_state(False)
-        self.update_display(update_all="Mask")
+        self.update_display(update_image=False)
     
     def clear_active_mask(self):
         if self.active_mask_id is None:
@@ -1527,7 +1474,7 @@ class SegmentationApp(ctk.CTk):
         else:
             self.toggle_all_masks_hide(False, propagate=False)
         if update_display:
-            self.update_display(update_all="Mask")
+            self.update_display(update_image=False)
     
     def toggle_mask_lock(self, mid, set_lock: bool):
         # change mid mask locked status to set_lock
@@ -1550,7 +1497,7 @@ class SegmentationApp(ctk.CTk):
             mask_ids = list(self.mask_labels.keys())
             for mid in mask_ids:
                 self.toggle_mask_hide(mid, set_hide, update_display=False)
-            self.update_display(update_all="Mask")
+            self.update_display(update_image=False)
 
     def toggle_all_masks_lock(self, set_lock: bool, enabled=True, propagate=True):
         state = "normal" if enabled else "disabled"
@@ -1644,7 +1591,8 @@ class SegmentationApp(ctk.CTk):
         
         if add_mask:
             self.add_mask("mask_1")
-        self.update_display()
+        
+        self.update_display(update_image=True)
         
         self.show_preview_frame("image")
         self.update_preview_frame()
@@ -1819,7 +1767,7 @@ class SegmentationApp(ctk.CTk):
         self.toggle_all_masks_hide(set_hide=False, enabled=True)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
-        self.update_display()
+        self.update_display(update_image=True)
         self.set_status("ready", "Ready")
 
 
@@ -1912,7 +1860,7 @@ class SegmentationApp(ctk.CTk):
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
             self.push_undo()
             self.brush_at(x, y, add=(self.tool_active["brush"] and not shift_pressed))
-            self.update_display(update_all="Mask")
+            self.update_display(update_image=False)
             self.draw_brush_preview(e)
             return
 
@@ -1929,7 +1877,7 @@ class SegmentationApp(ctk.CTk):
         self.last_brush_pos = None
         self._pan_start = None
         self._drag_counter = 0
-        self.update_display()
+        self.update_display(update_image=True)
         self.draw_brush_preview(e)
      
 
@@ -1963,7 +1911,7 @@ class SegmentationApp(ctk.CTk):
                 x0, y0, ox0, oy0 = self._pan_start
                 self.view_x = ox0 -int((e.x - x0)*(self.view_w/self.canvas.winfo_width()))
                 self.view_y = oy0- int((e.y - y0)*(self.view_h/self.canvas.winfo_height()))
-                self.update_display()
+                self.display_blended()
                 self.update_preview_frame()
             return
         
@@ -1980,7 +1928,7 @@ class SegmentationApp(ctk.CTk):
             self._prev_brush_pos = (x1, y1)
             self.push_undo() # TODO: Check problem for undo
             self.brush_at(x1, y1, add=(self.tool_active["brush"] and not shift_pressed))
-            self.update_display(update_all="Mask Local")
+            self.update_display(update_image=False, update_blended=False)
             self.draw_brush_preview(e)
             
             return
@@ -2003,7 +1951,7 @@ class SegmentationApp(ctk.CTk):
                 yi = int(y0 + dy * i / dist)
                 self.brush_at(xi, yi, add=(self.tool_active["brush"] and not shift_pressed))
 
-            self.update_display(update_all="Mask Local") # update only mask
+            self.update_display(update_image=False, update_blended=False) # update only mask
             self.draw_brush_preview(e)
             self._last_brush_update = now
             self._prev_brush_pos = (x1, y1)
@@ -2077,7 +2025,7 @@ class SegmentationApp(ctk.CTk):
             return
         self.view_x += dx
         self.view_y += dy
-        self.update_display()
+        self.update_display(update_image=True)
         self.update_preview_frame()
     
     def zoom_evt(self, e):
@@ -2121,10 +2069,12 @@ class SegmentationApp(ctk.CTk):
         dy = round(y * (old_h - self.view_h))
         self.view_x += dx
         self.view_y += dy
-            
-            
-
-        self.update_display()
+        
+        self.display_blended()
+        if self.zoom_event_id is not None:
+            self.after_cancel(self.zoom_event_id)
+        # if still resizing, schedule a new event
+        self.zoom_event_id = self.after(300, self.update_display)
         self.update_preview_frame()
         self.set_status("ready", "Ready")
 
@@ -2160,8 +2110,11 @@ class SegmentationApp(ctk.CTk):
         self.view_x += dx
         self.view_y += dy
 
-        
-        self.update_display()
+        self.display_blended()
+        if self.zoom_event_id is not None:
+            self.after_cancel(self.zoom_event_id)
+        # if still resizing, schedule a new event
+        self.zoom_event_id = self.after(300, self.update_display)
         self.update_preview_frame()
         self.set_status("ready", "Ready")
         
@@ -2179,7 +2132,7 @@ class SegmentationApp(ctk.CTk):
         self.view_w = self.canvas.winfo_width()#min(self.canvas.winfo_width(), self.orig_w)
         self.view_h = self.canvas.winfo_height()#min(self.canvas.winfo_height(), self.orig_h)
         
-        self.update_display()
+        self.update_display(update_image=True)
         self.update_preview_frame()
 
 
@@ -2311,15 +2264,6 @@ class SegmentationApp(ctk.CTk):
         self.sam_points.append([x, y])
         if multipoint:
             self.sam_pt_labels.append(1 if add else 0)
-            if add:
-                # fg point: fill with active mask color, outline black
-                pt_fill = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
-                pt_out = "black"
-            else:
-                # bg point: fill black, use the inverted active mask color for outline
-                pt_fill = "black"
-                pt_out = "#" + "".join([f"{255-c:02x}" for c in self.mask_colors[self.active_mask_id]])
-            self.canvas.create_oval(e.x-3, e.y-3, e.x+3, e.y+3, fill=pt_fill, outline=pt_out, width=1, tag="sam_pt")
             self.sam_compute(multipoint=True)
         else:
             self.sam_pt_labels.append(1)
@@ -2347,7 +2291,7 @@ class SegmentationApp(ctk.CTk):
         self.sam_preview[masks[i] & (~self.mask_locked)] = True
         
         if multipoint: # to show preview
-            self.update_display(update_all="Mask")
+            self.update_display(update_image=False)
         self.set_status("ready", "Ready")
 
     def sam_apply(self, add=True, cancel=False):
@@ -2373,7 +2317,7 @@ class SegmentationApp(ctk.CTk):
         # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig==0] = False
-        self.update_display(update_all="Mask")
+        self.update_display(update_image=False)
 
     def sam_apply_release(self):
         """
@@ -2449,7 +2393,7 @@ class SegmentationApp(ctk.CTk):
         # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig==0] = False
-        self.update_display(update_all="Mask")
+        self.update_display(update_image=False)
         
 
     # SMOOTHING (EROSION + DILATION)
@@ -2500,7 +2444,7 @@ class SegmentationApp(ctk.CTk):
         # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig==0] = False
-        self.update_display(update_all="Mask")
+        self.update_display(update_image=False)
         self.set_status("ready", "Ready")
 
 #%% Main cycle
