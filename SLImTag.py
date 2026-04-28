@@ -1088,11 +1088,20 @@ class SegmentationApp(ctk.CTk):
         
         # create alpha mask
         hidden_values_list = [0] + [mid for mid in self.mask_colors if self.mask_widgets[mid].hidden]
-        alpha_mask = Image.fromarray((1-np.isin(mask_disp, hidden_values_list).astype(np.uint8)) * self.mask_opacity)
+        alpha = self.mask_opacity if len(self.sam_points) == 0 else (self.mask_opacity // 2)
+        alpha_mask = Image.fromarray((1-np.isin(mask_disp, hidden_values_list).astype(np.uint8)) * alpha)
         mask_disp_rgb.putalpha(alpha_mask)
         
         # create composite image
-        self.blended = Image.alpha_composite(self.image_orig.convert("RGBA"), mask_disp_rgb).convert("RGB")
+        blended = Image.alpha_composite(self.image_orig.convert("RGBA"), mask_disp_rgb)
+        if len(self.sam_points) > 0:
+            # add preview image
+            if not self.mask_widgets[self.active_mask_id].hidden: # if active mask is hidden, skip computation
+                preview_alpha = max(min(int(self.mask_opacity + 0.35 * (255 - self.mask_opacity)), 255), 0)
+                overlay_prev = np.zeros((self.orig_h, self.orig_w, 4), np.uint8)
+                overlay_prev[self.sam_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
+                blended = Image.alpha_composite(blended, Image.fromarray(overlay_prev))
+        self.blended = blended.convert("RGB")
     
     def display_blended(self):
         """
