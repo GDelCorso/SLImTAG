@@ -668,7 +668,7 @@ def adjust_image(image, brightness=0, contrast=0, shadows=0):
     img = image.astype(np.float32) / 255.0
     alpha = 1 + contrast / 100.0
     beta = brightness / 100.0
-    gamma = math.exp2(shadows / 100.0) # math.exp2 requires python >= 3.11
+    gamma = 2 ** (shadows / 100.0) # math.exp2(...) might be slightly better but requires python >= 3.11
     img = alpha * (img - 0.5) + 0.5 + beta
     img = np.clip(img, 0.0, 1.0)
     img = img ** gamma
