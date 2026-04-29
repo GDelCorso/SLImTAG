@@ -23,14 +23,17 @@ import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion
 from scipy.special import expit # sigmoid
 
-# Image manipulation and TkIntert (ImageTk)
-from PIL import Image, ImageDraw, ImageTk
-
 # TkInter and CustomTkInter GUI
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
 import screeninfo
+
+# Image manipulation and TkInter interaction (ImageTk)
+from PIL import Image, ImageDraw, ImageTk
+
+# Configuration file management
+import tomlkit
 
 # Custom utils
 from slimtag_utils import SplashScreen
@@ -53,60 +56,9 @@ warnings.filterwarnings(
     message="You are using `torch.load` with `weights_only=False`"
 )
 
-#%% User selected parameters
-# TODO move these into configuration file
-MAX_DISPLAY = 800   # Maximum display size for resizing images
-UNDO_DEPTH = 10     # Maximum number of undo steps
+#%% Global parameters
 
-MAX_ZOOM_PIXEL = 32 # minimum number of pixels of orig image visible at max zoom level
-MIN_ZOOM_PIXEL = 6144 # maximum number of pixels of orig image visible at max zoom level
-
-REFRESH_RATE_BRUSH = 0.05    # Refresh rate for the brush
-
-PREVIEW_DIM = 250 # max dimension of preview canvas
-
-# predefined high contrast colors for masks
-MAX_MASKS = 20 
-HIGH_CONTRAST_COLORS = [
-    (158, 31, 99), (24, 105, 204), (150, 99, 177), (21, 194, 210),
-    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255),
-    (0, 255, 255), (255, 128, 0), (128, 0, 255), (0, 255, 128),
-    (128, 255, 0), (255, 0, 128), (0, 128, 255), (128, 128, 0),
-    (128, 0, 0), (0, 128, 0), (0, 0, 128)
-]
-# OLD COLORS
-#, (200, 200, 200), (255, 200, 200), (200, 255, 200), (200, 200, 255)
-
-# TODO remove single button colors
-# colors for different tool states
-TOOL_OFF_COLOR = "#3A3A3A"   # neutral grey when tool is off
-BRUSH_ON_COLOR = "#4CAF50"   # green
-MAGIC_ON_COLOR = "#FF9800"   # orange
-CC_ON_COLOR = "#9C27B0"      # purple
-SMOOTH_ON_COLOR = "#2196F3"  # blue
-
-# colors for tools panel (light, dark)
-# obtained from color above by overlaying the standard background with the color above at 15% alpha
-TOOL_PANEL_COLOR = {
-    "brush":  ("#C5D4C6", "#303F31"),
-    "wand":   ("#E0D0BA", "#4B3B25"),
-    "ccomp":  ("#D1BFD4", "#3C2A3F"),
-    "smooth": ("#BED0DE", "#293B49")
-    }
-# as above, but with color at 5% alpha
-TOOL_PANEL_SUBCOLOR = {
-    "brush":  ("#D3D8D4", "#2C312D"),
-    "wand":   ("#DDD7D0", "#363029"),
-    "ccomp":  ("#D7D1D9", "#302A32"),
-    "smooth": ("#D2D8DD", "#2A3035")
-    }
-# color at 10% alpha, if needed
-# TOOL_PANEL_SUBCOLOR = {
-#     "brush":  ("#CDD7CE", "#2E382F"),
-#     "wand":   ("#DFD4C5", "#413627"),
-#     "ccomp":  ("#D4C8D7", "#362A39"),
-#     "smooth": ("#C8D4DD", "#2A363F")
-#     }
+CONFIG_FILE_PATH = "config.toml"
 
 STATUS_SYMBOL = "●"
 STATUS_COLOR = {
@@ -115,7 +67,6 @@ STATUS_COLOR = {
     "error":  ("#E74C3C", "#E74C3C"),  # red
     "idle":   ("#95A5A6", "#95A5A6"),  # gray
     }
-
 
 #%% SAM parameters
 # TODO rework magic wand
@@ -131,13 +82,9 @@ elif MODEL_TYPE == "vit_h":     # Advanced
 else:
     raise Exception("Warning: select a correct model type.")
 
-
-
 #%% CTK parameters
-#ctk.set_appearance_mode("System")   # System theme
-#ctk.set_appearance_mode("dark") # force dark mode for testing
-ctk.set_default_color_theme("color_palette.json") # CTK color theme
 
+ctk.set_default_color_theme("color_palette.json") # CTK color theme
 HIGHLIGHT_COLOR = ctk.ThemeManager.theme["CTkButton"]["border_color"]
 
 #%% SLImTAG main class
@@ -145,8 +92,9 @@ class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.appearance_mode = tk.StringVar(self, value="dark")
-        ctk.set_appearance_mode(self.appearance_mode.get())
+        self.slimtag_config = self.load_config_file(CONFIG_FILE_PATH)
+        
+        ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
 
         # hide main window and open splash screen
         self.withdraw()
@@ -334,7 +282,7 @@ class SegmentationApp(ctk.CTk):
         
         #%% Top Menu
         self.menu_bar = tk.Menu(self)
-        self.set_menu_theme(self.menu_bar, self.appearance_mode.get())
+        self.set_menu_theme(self.menu_bar, self.slimtag_config["main"]["appearance"])
 
         self.config(menu=self.menu_bar)
         self.topmenu_items = {}
@@ -645,18 +593,19 @@ class SegmentationApp(ctk.CTk):
         self.navigation_frame.grid(row=3, column=0, sticky="n", padx=10, pady=(5, 10))
 
         self.sub_canvas_frames = {}
+        preview_dim = self.slimtag_config["view"]["preview_dim"]
         
         image_only_frame = ctk.CTkFrame(self.navigation_frame)#, fg_color="transparent")
-        image_only_frame.canvas = ctk.CTkCanvas(image_only_frame, bg="black", highlightthickness=0, width=PREVIEW_DIM, height=PREVIEW_DIM)
+        image_only_frame.canvas = ctk.CTkCanvas(image_only_frame, bg="black", highlightthickness=0, width=preview_dim, height=preview_dim)
         image_only_frame.canvas.grid(row=0, column=0, sticky="sew", padx=5, pady=5)
         image_only_frame.grid_rowconfigure(0, weight=1)
         image_only_frame.grid_columnconfigure(0, weight=1)
         self.sub_canvas_frames["image"] = image_only_frame
         
         ortho_views_frame = ctk.CTkFrame(self.navigation_frame)#, fg_color="transparent")
-        ortho_views_frame.view1 = ctk.CTkCanvas(ortho_views_frame, bg="black", highlightthickness=0, width=PREVIEW_DIM, height=PREVIEW_DIM)
+        ortho_views_frame.view1 = ctk.CTkCanvas(ortho_views_frame, bg="black", highlightthickness=0, width=preview_dim, height=preview_dim)
         ortho_views_frame.view1.grid(row=0, column=0, sticky="sew", padx=5, pady=5)
-        ortho_views_frame.view2 = ctk.CTkCanvas(ortho_views_frame, bg="black", highlightthickness=0, width=PREVIEW_DIM, height=PREVIEW_DIM)
+        ortho_views_frame.view2 = ctk.CTkCanvas(ortho_views_frame, bg="black", highlightthickness=0, width=preview_dim, height=preview_dim)
         ortho_views_frame.view2.grid(row=1, column=0, sticky="sew", padx=5, pady=5)
         ortho_views_frame.grid_columnconfigure(0, weight=1)
         self.sub_canvas_frames["ortho"] = ortho_views_frame
@@ -857,6 +806,92 @@ class SegmentationApp(ctk.CTk):
         # Refresh and update display
         self.update_display(update_image=True)
     
+    def load_config_file(self, toml_file):
+        """
+        Load a TOML file, and return the corresponding tomlkit.TOMLDocument
+        object with the "correct" default values.
+        
+        """
+        with open(toml_file, "rb") as config_path:
+            cfg = tomlkit.load(config_path)
+        
+        class Field():
+            """
+            Dummy class for field descriptor in schema
+            """
+            def __init__(self, type_, default=..., required=False):
+                self.type_ = type_
+                self.default = default
+                self.required = required
+        
+        def validate(cfg, schema, path=""):
+            """
+            Recursively check that the TOML config is well structured
+            
+            Schema allows to check keys existence, type consistency, and
+            either add default values or raise KeyError
+            """
+            for key, rule in schema.items():
+                # update current schema level
+                current_path = f"{path}.{key}" if path else key
+                # check nested tables and call recursively
+                if isinstance(rule, dict):
+                    if key not in cfg:
+                        cfg[key] = {}
+                    validate(cfg[key], rule, current_path)
+                    continue
+                # if we are at a leaf, check if key exists
+                # if not, check Field to determine what to do
+                if key not in cfg:
+                    if rule.required:
+                        raise KeyError(f"{current_path}")
+                    elif rule.default is not ...:
+                        cfg[key] = rule.default
+                        continue
+                    else:
+                        continue
+                # if we are here, we are at a leaf and key exists
+                # so we just check consistency with type
+                value = cfg[key]
+                if not isinstance(value, rule.type_):
+                    raise TypeError(f"'{current_path}' should have type {rule.type_.__name__}, got {type(value).__name__} instead")
+
+        # structure to be ckecked
+        expected = {
+            "main": {
+                "appearance": Field(str, default="dark"),
+                "undo_depth": Field(int, default=10)
+            },
+            "modules": {
+                "sam": Field(bool, required=True),
+                "biomedical": Field(bool, required=True)
+            },
+            "view": {
+                "zoom": {
+                    "max_pixel": Field(int, default=32),
+                    "min_pixel": Field(int, default=6144)
+                },
+                "refresh_rate_brush": Field(float, default=0.05),
+                "preview_dim": Field(int, default=250)
+            },
+            "mask": {
+                "max_masks": Field(int, default=20),
+                "default_mask_colors": Field(list, required=True)
+            }
+        }
+        
+        # validate and eventually populate with defaults
+        validate(cfg, expected)
+        
+        # manually check inconsistencies
+        if cfg["main"]["appearance"] not in ["light", "dark"]:
+            cfg["main"]["appearance"] = "dark"
+        
+        return cfg
+    
+    def save_config_file(self):
+        pass #TODO
+    
     def quit_program(self):
         """
         Quit program.
@@ -930,12 +965,12 @@ class SegmentationApp(ctk.CTk):
     
     #%% APPEARANCE (DARK/LIGHT)
     def toggle_appearance(self):
-        ctk.set_appearance_mode(self.appearance_mode.get())
-        self.set_menu_theme(self.menu_bar, self.appearance_mode.get())
+        ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
+        self.set_menu_theme(self.menu_bar, self.slimtag_config["main"]["appearance"])
         for menu in self.topmenu_items:
-            self.set_menu_theme(self.topmenu_items[menu], self.appearance_mode.get())
+            self.set_menu_theme(self.topmenu_items[menu], self.slimtag_config["main"]["appearance"])
         if hasattr(self, 'active_context_menu'):
-            self.set_menu_theme(self.active_context_menu, self.appearance_mode.get())
+            self.set_menu_theme(self.active_context_menu, self.slimtag_config["main"]["appearance"])
 
     def set_menu_theme(self, menu, mode):
         if mode.lower() == 'dark':
@@ -950,7 +985,7 @@ class SegmentationApp(ctk.CTk):
         # TODO implement for ortho
         # if hasattr(self.sub_canvas_frames[preview], "view1") ...
         if self.image_orig is not None:
-            scale = max(self.orig_w, self.orig_h) / PREVIEW_DIM
+            scale = max(self.orig_w, self.orig_h) / self.slimtag_config["view"]["preview_dim"]
             self.preview_scale = scale
             self.sub_canvas_frames["image"].canvas.configure(width=int(self.orig_w / scale), height=int(self.orig_h / scale))
             self.sub_canvas_image = ImageTk.PhotoImage(self.image_orig.resize((int(self.orig_w / scale), int(self.orig_h / scale)), Image.Resampling.LANCZOS))
@@ -1263,7 +1298,7 @@ class SegmentationApp(ctk.CTk):
         '''
         if self.mask_orig is not None:
             self.undo_stack.append(self.mask_orig.copy())
-            if len(self.undo_stack) > UNDO_DEPTH:
+            if len(self.undo_stack) > self.slimtag_config["main"]["undo_depth"]:
                 self.undo_stack.pop(0)
 
     def undo(self):
@@ -1297,14 +1332,14 @@ class SegmentationApp(ctk.CTk):
             return
         
         self.deactivate_tools()
-        if len(self.mask_labels) >= MAX_MASKS:
+        if len(self.mask_labels) >= self.slimtag_config["mask"]["max_masks"]:
             return
         
-        default_color = [c for c in HIGH_CONTRAST_COLORS if c not in self.mask_colors.values()][0] # get first non-used color
+        default_color = [tuple(c) for c in self.slimtag_config["mask"]["default_mask_colors"] if tuple(c) not in self.mask_colors.values()][0] # get first non-used color
         color = None
         
         # candidate mask id
-        mid = min([i+1 for i in range(MAX_MASKS) if i+1 not in self.mask_labels.keys()])
+        mid = min([i+1 for i in range(self.slimtag_config["mask"]["max_masks"]) if i+1 not in self.mask_labels.keys()])
         
         if name is None:
             # Ask user for mask name
@@ -1414,7 +1449,7 @@ class SegmentationApp(ctk.CTk):
         context_menu.post(e.x_root, e.y_root)
 
         self.active_context_menu = context_menu
-        self.set_menu_theme(self.active_context_menu, self.appearance_mode.get())
+        self.set_menu_theme(self.active_context_menu, self.slimtag_config["main"]["appearance"])
     
     def edit_mask(self, target_id): 
         self.deactivate_tools()
@@ -1589,8 +1624,8 @@ class SegmentationApp(ctk.CTk):
         # reset zoom
         self.zoom = 1.0
         # Define a max and min zoom
-        self.zoom_max = self.min_monitor_dim / MAX_ZOOM_PIXEL
-        self.zoom_min = self.max_monitor_dim / MIN_ZOOM_PIXEL
+        self.zoom_max = self.min_monitor_dim / self.slimtag_config["view"]["zoom"]["max_pixel"]
+        self.zoom_min = self.max_monitor_dim / self.slimtag_config["view"]["zoom"]["min_pixel"]
 
         # reset history
         self.undo_stack.clear()
@@ -1726,7 +1761,7 @@ class SegmentationApp(ctk.CTk):
             arr = np.array(img, dtype=np.uint8)
             self.mask_orig = arr.copy()
             labels = np.unique(arr)
-            labels = labels[labels != 0][:MAX_MASKS]
+            labels = labels[labels != 0][:self.slimtag_config["mask"]["max_masks"]]
             palette = img.getpalette()
             
             for l in labels:
@@ -1759,7 +1794,7 @@ class SegmentationApp(ctk.CTk):
                 if t not in seen:
                     seen.add(t)
                     unique_colors.append(t)
-                    if len(unique_colors) >= MAX_MASKS:
+                    if len(unique_colors) >= self.slimtag_config["mask"]["max_masks"]:
                         break
             
             mask = np.zeros((h, w), np.uint8)
@@ -1952,7 +1987,7 @@ class SegmentationApp(ctk.CTk):
         if not hasattr(self, "_last_brush_update"):
             self._last_brush_update = 0.0
         
-        if now - self._last_brush_update >= REFRESH_RATE_BRUSH:
+        if now - self._last_brush_update >= self.slimtag_config["view"]["refresh_rate_brush"]:
             x0, y0 = self._prev_brush_pos
             dx = x1 - x0
             dy = y1 - y0

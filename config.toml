@@ -1,0 +1,51 @@
+[main]
+appearance = "dark" # admissible values: "dark", "light"
+undo_depth = 10 # max number of undo steps
+
+[modules]
+sam = true
+biomedical = false
+
+[view]
+zoom.max_pixel = 32 # number of pixels of original image visible at max zoom level
+zoom.min_pixel = 6144 # number of pixels of original image visible at min zoom level
+refresh_rate_brush = 0.05
+preview_dim = 250 # max dimension of preview canvases
+
+[mask]
+max_masks = 20
+# the following is a list of length >= max_masks with RGB triples
+# when a new mask is created, the first unused color from this list is selected as the default color for the mask
+default_mask_colors = [
+    # custom palette
+    [158, 31, 99],    # dark magenta
+    [24, 105, 204],   # soft blue
+    [150, 99, 177],   # deep lilac
+    [21, 194, 210],   # turquoise blue
+    # standard colors
+    [255, 0, 0],      # red
+    [0, 255, 0],      # green
+    [0, 0, 255],      # blue
+    [255, 255, 0],    # yellow
+    [255, 0, 255],    # magenta
+    [0, 255, 255],    # cyan
+    [255, 128, 0],    # orange
+    [128, 0, 255],    # violet
+    [0, 255, 128],    # spring green
+    [128, 255, 0],    # chartreuse
+    [255, 0, 128],    # deep pink
+    [0, 128, 255],    # azure
+    [128, 0, 0],      # dark red
+    [0, 128, 0],      # dark green
+    [0, 0, 128],      # dark blue
+    [128, 128, 0],    # olive
+    [128, 0, 128],    # purple
+    [0, 128, 128],    # teal
+    [255, 200, 200],  # rose
+    [200, 255, 200],  # mint green
+    [200, 200, 255],  # lavender
+    [0, 0, 0],        # black
+    [255, 255, 255],  # white
+    [128, 128, 128],  # mid gray
+    [200, 200, 200],  # light gray
+]

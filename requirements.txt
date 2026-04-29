@@ -9,6 +9,9 @@ pillow==12.0.0
 customtkinter==5.2.2
 screeninfo==0.8.1
 
+# Config file management
+tomlkit==0.14.0
+
 # Torch and SAM (Segment anything model)
 torch==2.5.1
 torchvision==0.20.1
