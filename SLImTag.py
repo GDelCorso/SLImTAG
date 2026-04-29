@@ -30,6 +30,7 @@ from PIL import Image, ImageDraw, ImageTk
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
+import screeninfo
 
 # Custom utils
 from slimtag_utils import SplashScreen
@@ -145,7 +146,7 @@ class SegmentationApp(ctk.CTk):
         super().__init__()
         
         self.appearance_mode = tk.StringVar(self, value="dark")
-        ctk.set_appearance_mode(self.appearance_mode.get())        
+        ctk.set_appearance_mode(self.appearance_mode.get())
 
         # hide main window and open splash screen
         self.withdraw()
@@ -193,6 +194,9 @@ class SegmentationApp(ctk.CTk):
         self.zoom_max = 1.0
         self.zoom_min = 1.0
         self._pan_start = None
+        monitor_dims = sum([[m.width, m.height] for m in screeninfo.get_monitors()], [])
+        self.min_monitor_dim = min(monitor_dims)
+        self.max_monitor_dim = max(monitor_dims)
         
         # labels for zoom and mouse position
         self.pos_label_var = tk.StringVar(self, value="| x: 0 | y: 0 | z: 0 |")
@@ -1585,8 +1589,8 @@ class SegmentationApp(ctk.CTk):
         # reset zoom
         self.zoom = 1.0
         # Define a max and min zoom
-        self.zoom_max = max(self.canvas.winfo_width() / MAX_ZOOM_PIXEL, self.canvas.winfo_height() / MAX_ZOOM_PIXEL)
-        self.zoom_min = min(self.canvas.winfo_width() / MIN_ZOOM_PIXEL, self.canvas.winfo_height() / MIN_ZOOM_PIXEL)
+        self.zoom_max = self.min_monitor_dim / MAX_ZOOM_PIXEL
+        self.zoom_min = self.max_monitor_dim / MIN_ZOOM_PIXEL
 
         # reset history
         self.undo_stack.clear()
