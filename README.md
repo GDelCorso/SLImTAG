@@ -109,6 +109,8 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 
 ## Usage
 
+![Main GUI window](images/doc/gui.png)
+
 ### Import Images
 
 The first step is to load an image (in PNG or JPG) using `Image > Import image` from the menu or the <kbd>Ctrl</kbd>+<kbd>I</kbd> shortcut.
@@ -138,7 +140,7 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 | ![Brush](images/doc/buttons/brush.png) **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
 | ![Eraser](images/doc/buttons/eraser.png) **Eraser**               | Erase manually            | – | Erase                      | –                         |
 | ![Magic wand](images/doc/buttons/wand.png) **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
-| ![Multipoint magic wand](images/doc/buttons/wand-multi.png) **Multipoint magic wand**          | AI-assisted segmentation (SAM)     | – | Add positive point                 | Add negative point                 |
+| ![Multipoint magic wand](images/doc/buttons/wand_multi.png) **Multipoint magic wand**          | AI-assisted segmentation (SAM)     | – | Add positive point                 | Add negative point                 |
 | ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
 | ![Clean](images/doc/buttons/clean.png) **Clean** | Select/remove connected areas      | – | Keep only connected component | – |
 | ![Smoothing](images/doc/buttons/smooth.png) **Smoothing**           | Smooth component boundary   | <kbd>S</kbd> | Erode, then dilate                  | Dilate, then erode                         |
