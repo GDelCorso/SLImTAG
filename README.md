@@ -11,8 +11,8 @@ Particular focus on:
 - [ ] Integrate existing *load* nrrd, nifti, etc. modules [Gdc]
 - [ ] Upload (already tested) Bayesian module [Gdc]
 - [ ] Change existing 3D visualization to ease the read on biomedical settings [Op]
-- [ ] Tooltip hover [Op]
-- [ ] Preview multipoint improvement [Op]
+- [x] Tooltip hover [Op]
+- [x] Preview multipoint improvement [Op]
 - [ ] Re-activate exitings tools in the novel graphical interface [All]
 - [ ] Define boundaries visualization [Fv]
 - [ ] Load fex example images/nrrds
@@ -29,14 +29,14 @@ Particular focus on:
 
 ## Features
 
-- Add, select, and delete multiple tasks
+- Add, manage and delete multiple masks.
+- Magic wand for AI-assisted segmentation using SAM.
 - Brush tool for manual painting.
-- Magic wand (SAM) for AI-assisted segmentation.
-- Connected Component tool for precise selection/removal.
+- Cut and clear tools for precise selection/removal of connected components.
 - Smoothing tool (dilation/erosion) for mask refinement.
 - Undo support with **Ctrl-Z shortcut**.
-- Save masks and load masks
-- Minimal libraries requirements
+- Save and load masks in lightweight PNG format.
+- Minimal libraries requirements.
 
 ---
 
@@ -51,6 +51,8 @@ Please note that the version numbers listed here refer to the environment in whi
 - scipy == 1.17.0 (erosion/dilation tool)
 - pillow == 12.0.0 (images management)
 - customtkinter == 5.2.2 (GUI)
+- screeninfo == 0.8.1 (recover screen info for UI management)
+- tomlkit == 0.14.0 (configuration file management)
 
 Also tkinter is required, but it cannot be installed via pip. On Windows it should be provided with Python; on Mac and Linux, you may need to install it through your system's package manager (e.g. `brew install python-tk` with homebrew for Mac, or `sudo apt install python3-tk` for Ubuntu-based Linux distros).
 
@@ -136,6 +138,7 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 | ![Brush](images/doc/buttons/brush.png) **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
 | ![Eraser](images/doc/buttons/eraser.png) **Eraser**               | Erase manually            | – | Erase                      | –                         |
 | ![Magic wand](images/doc/buttons/wand.png) **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
+| ![Multipoint magic wand](images/doc/buttons/wand-multi.png) **Multipoint magic wand**          | AI-assisted segmentation (SAM)     | – | Add positive point                 | Add negative point                 |
 | ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
 | ![Clean](images/doc/buttons/clean.png) **Clean** | Select/remove connected areas      | – | Keep only connected component | – |
 | ![Smoothing](images/doc/buttons/smooth.png) **Smoothing**           | Smooth component boundary   | <kbd>S</kbd> | Erode, then dilate                  | Dilate, then erode                         |
@@ -156,6 +159,8 @@ When **no** tool is selected, left click-and-drag to pan the image. This can als
 
 While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to enter "multipoint mode". In this mode, a single left click adds a "positive" point (i.e., belonging to the mask) for SAM segmentation, and a single right click adds a "negative" point (i.e., belonging to the background). The mask is then computed and added when <kbd>Ctrl</kbd> is released.
 
+The multipoint magic wand is also provided as a standalone tool. In this case, there is no need to hold any button: positive and negative points are added with left and right clicks respectively. The candidate mask is updated at each click, then either press <kbd>Enter</kbd> to confirm and apply it or press <kbd>Esc</kbd> to discard it.
+
 ---
 
 ## TO-DO LIST and BUGFIX:
@@ -171,7 +176,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 
 - [ ] ~~Implement argparse with `--no-sam` option that disables SAM (disable button; avoid libraries import; deactivate SAM loading in `load_image`; add requirements-no-sam.txt)~~
 - [ ] ~~ALTERNATIVE: implement classic scipy's region detection algorithms that are bound to magic wand when SLImTAG is called with `--no-sam`~~
-- [ ] Implement configuration file that is checked at startup with all the parameters
+- [x] Implement configuration file that is checked at startup with all the parameters
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
 - [ ] ~~Convert hardcoded parameters to argparse arguments~~
 - [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
@@ -211,7 +216,7 @@ While the magic wand is selected, you can press and hold <kbd>Ctrl</kbd> to ente
 #### Magic wand
 
 - [ ] SAM click-and-drag: apply to selected bounding box (at release) (both positive and negative)
-- [ ] When apllying zoom during SAM-preview multipoints the markers follow the user perspective
+- [x] BUG: when applying pan/zoom during SAM-multipoints, the preview markers should follow the user perspective
 
 #### Smoothing
 
