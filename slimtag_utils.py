@@ -689,9 +689,11 @@ class Tooltip():
                  bg=ctk.ThemeManager.theme["CTk"]["fg_color"],
                  pad=(10, 2, 10, 2),
                  text='',
-                 waittime=400):
+                 waittime=400,
+                 displaytime=3000):
 
         self.waittime = waittime  # in miliseconds
+        self.displaytime = displaytime # in milliseconds
         self.widget = widget
         self.text = text
         self.widget.bind("<Enter>", self.onEnter)
@@ -700,6 +702,7 @@ class Tooltip():
         self.bg = bg
         self.pad = pad
         self.id = None
+        self.hide_id = None
         self.tw = None
 
     def onEnter(self, event=None):
@@ -718,6 +721,11 @@ class Tooltip():
         self.id = None
         if id_:
             self.widget.after_cancel(id_)
+    
+    def unschedule_hide(self):
+        if self.hide_id:
+            self.widget.after_cancel(self.hide_id)
+            self.hide_id = None
 
     def show(self):
         def tip_pos_calculator(widget, label, *, tip_delta=(10, 5), pad=self.pad):
@@ -787,8 +795,11 @@ class Tooltip():
         self.tw.update_idletasks()
         self.tw.geometry(f"{win.winfo_width()-(win.winfo_width()%2)}x{win.winfo_height()}+{x}+{y}")
         self.tw.deiconify()
+        self.unschedule_hide()
+        self.hide_id = self.widget.after(self.displaytime, self.hide)
 
     def hide(self):
+        self.unschedule_hide()
         tw = self.tw
         if tw:
             tw.destroy()
