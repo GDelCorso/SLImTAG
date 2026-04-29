@@ -94,6 +94,11 @@ class SegmentationApp(ctk.CTk):
         
         self.slimtag_config = self.load_config_file(CONFIG_FILE_PATH)
         
+        # TODO
+        # we're still designing light mode palette and icons,
+        # for now hard force dark mode
+        self.slimtag_config["main"]["appearance"] = "dark" # TO BE REMOVED WHEN DONE
+        
         ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
 
         # hide main window and open splash screen
