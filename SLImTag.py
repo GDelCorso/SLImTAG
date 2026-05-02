@@ -172,6 +172,7 @@ class SegmentationApp(ctk.CTk):
         self.list_index = None
         self.path_aux_save = None
         self.path_original_image = None
+        self.quicksave_path = None
         
         self.images_num_label_var = tk.StringVar(self, value="Image 0 of 0")
 
@@ -1610,6 +1611,7 @@ class SegmentationApp(ctk.CTk):
             p = path
         
         self.path_original_image = p
+        self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
 
         self.set_status("loading", "Loading image...")
         img = Image.open(p).convert("RGB")
@@ -1750,13 +1752,15 @@ class SegmentationApp(ctk.CTk):
         p = filedialog.askopenfilename(filetypes=[("PNG (indexed or RGB)", "*.png")])
         if not p:
             return
-        
+
         self.set_status("loading", "Loading mask...")
         
         self.push_undo()
         ext = os.path.splitext(p)[1].lower()
         if ext != ".png":
             return
+        
+        self.quicksave_path = p
         
         # RESET ALL MASKS
         self.clear_all_masks()
@@ -1848,7 +1852,7 @@ class SegmentationApp(ctk.CTk):
                 p = os.path.join(self.path_aux_save, os.path.splitext(os.path.basename(self.list_images[self.list_index]))[0]+".png")
             # Otherwise
             else:
-                p = os.path.splitext(self.path_original_image)[0] + "_mask.png"
+                p = self.quicksave_path
         
         self.set_status("loading", "Saving mask...")
     

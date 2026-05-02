@@ -210,7 +210,7 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 - [x] Add toggle "hide mask" in mask list (to consider: is a hidden mask saved? can a hidden mask be modified?)
 - [x] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
 - [ ] TO CONSIDER: allow opening a mask without an underlying image for direct mask editing (maybe create a dummy black image with suitable size, to be discarded)
-- [ ] When "Load mask" is used, bind "Quick save" (<kbd>Ctrl</kbd>+<kbd>S</kbd>) to loaded mask path instead of default one
+- [x] When "Load mask" is used, bind "Quick save" (<kbd>Ctrl</kbd>+<kbd>S</kbd>) to loaded mask path instead of default one
 
 #### Brush
 
