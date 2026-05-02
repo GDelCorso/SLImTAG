@@ -710,6 +710,8 @@ class SegmentationApp(ctk.CTk):
         # Shortcuts
         self.bind("<b>", lambda e: self.toggle_tool("brush"))
         self.bind("<B>", lambda e: self.toggle_tool("brush"))
+        self.bind("<e>", lambda e: self.toggle_tool("eraser"))
+        self.bind("<E>", lambda e: self.toggle_tool("eraser"))
         self.bind("<m>", lambda e: self.toggle_tool("wand"))
         self.bind("<M>", lambda e: self.toggle_tool("wand"))
         self.bind("<c>", lambda e: self.toggle_tool("cut"))

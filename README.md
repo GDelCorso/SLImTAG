@@ -138,7 +138,7 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 | Button / Tool           | Description                        | Shortcut     | Left click                 | Right click                   |
 | ----------------------- | ---------------------------------- | ------------ | -------------------------- | ----------------------------- |
 | ![Brush](images/doc/buttons/brush.png) **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
-| ![Eraser](images/doc/buttons/eraser.png) **Eraser**               | Erase manually            | – | Erase                      | –                         |
+| ![Eraser](images/doc/buttons/eraser.png) **Eraser**               | Erase manually            | <kbd>E</kbd> | Erase                      | –                         |
 | ![Magic wand](images/doc/buttons/wand.png) **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
 | ![Multipoint magic wand](images/doc/buttons/wand_multi.png) **Multipoint magic wand**          | AI-assisted segmentation (SAM)     | – | Add positive point                 | Add negative point                 |
 | ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
