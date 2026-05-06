@@ -125,7 +125,7 @@ Right-clicking on a mask opens a contextual menu with the options to edit the ma
 
 `Mask > Save mask` (shortcut: <kbd>Ctrl</kbd>+<kbd>S</kbd>) saves the mask as an indexed PNG file with its default name and position, namely, the mask will have the same name as the original image with `_mask` appended, and will be placed in the same folder. `Mask > Save mask as...` instead allows the user to choose a name and position for the mask.
 
-`Mask > Load mask` loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored.
+`Mask > Load mask` loads a PNG representing a mask, extracting up to 20 unique colors as separate masks. Extra colors are ignored. In this case the default behaviour of `Mask > Save mask` is to overwrite the file from which the mask has been loaded.
 
 The `Hide mask` (eye icon) and `Lock mask` (padlock) icons for each mask respectively hide and lock the corresponding mask. A hidden mask won't be displayed in the interface (but it will be saved). A locked mask cannot be overwritten by _other_ masks (but can be modified if it is the active mask). The icons on top of the list correspond to `Hide all masks`/`Lock all masks` functions.
 
