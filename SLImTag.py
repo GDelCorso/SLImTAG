@@ -42,6 +42,9 @@ from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
+# Custom biomedical utils
+from slimtag_biomedical import load_medical_volume
+
 # Torch and SAM (Segment anything model)
 import torch
 from segment_anything import sam_model_registry, SamPredictor
@@ -318,6 +321,7 @@ class SegmentationApp(ctk.CTk):
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
+        image_menu.add_command(label="Import NRRD/NIFTI/DICOM", command=self.load_biomedical, accelerator="Ctrl+B")
         image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F", state="disabled")
         # TODO reactivate import folder
         self.topmenu_items["image"] = image_menu
@@ -1663,6 +1667,111 @@ class SegmentationApp(ctk.CTk):
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.set_status("ready", "Ready")
+        
+    def load_biomedical(self, path=None, add_mask=True):
+        '''
+        Load a DICOM/NIFTI/NRRD image and define an empty mask on it.
+        '''
+    
+        if self.modified:
+            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                        buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
+                                       )
+            answer = confirm.return_value
+            if answer == "save":
+                self.save_mask()
+                self.set_modified(False)
+            elif answer == "discard":
+                self.set_modified(False)
+            else:
+                return
+    
+        self.deactivate_tools()
+        self.set_controls_state(False)
+        
+        # Dialog
+        if path is None:
+            # Reset path
+            self.list_images = None
+            self.list_index = 0
+            
+            p = filedialog.askopenfilename(filetypes=[("Image files", ("*.dcm", "*.nrrd", "*.nii"))])
+            if not p:
+                return
+            
+        else:
+            p = path
+        
+        self.path_original_image = p
+        self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
+    
+        self.set_status("loading", "Loading image...")
+        
+        
+        metadata, spacing, volume = load_medical_volume(p)
+        
+        print("Metadata:")
+        print(metadata)
+    
+        print("\nSpacing:")
+        print(spacing)
+    
+        print("\nVolume shape:")
+        print(volume.shape)
+    
+        print("\nData type:")
+        print(volume.dtype)
+        #TODO: Integrate with the 3D visual 
+        # img = Image.open(p).convert("RGB")
+        
+        # self.orig_w, self.orig_h = img.size
+        # self.image_orig = img
+        # self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
+        # self.mask_locked = np.full(self.mask_orig.shape, False)
+        # self.sam_preview = np.full(self.mask_orig.shape, False)
+        
+        # self.update_title()
+        # # Async load of the SAM model to avoid freezed interface
+        # if self.thread is None or not self.thread.is_alive():
+        #     self.thread = threading.Thread(target=self.async_loader, daemon=True)
+        #     self.thread.start()
+        
+        # # reset masks
+        # self.clear_all_masks()
+        
+        # # reset zoom
+        # self.zoom = 1.0
+        # # Define a max and min zoom
+        # self.zoom_max = self.min_monitor_dim / self.slimtag_config["view"]["zoom"]["max_pixel"]
+        # self.zoom_min = self.max_monitor_dim / self.slimtag_config["view"]["zoom"]["min_pixel"]
+    
+        # # reset history
+        # self.undo_stack.clear()
+        
+        # # Define the view parameters (equal to the canvas size):
+        # self.update_idletasks()
+        # self.view_x = 0
+        # self.view_y = 0
+        # self.view_w = self.canvas.winfo_width()
+        # self.view_h = self.canvas.winfo_height()
+        
+        # if add_mask:
+        #     self.add_mask("mask_1")
+        
+        # self.update_display(update_image=True)
+        
+        # self.show_preview_frame("image")
+        # self.update_preview_frame()
+        
+        # if self.list_images is None:
+        #     self.images_num_label_var.set("Image 1 of 1")
+        #     #self.next_image_btn.configure(state="disabled")
+        #     # TODO image navigation
+    
+        # self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        # self.toggle_all_masks_lock(set_lock=False, enabled=True)
+        
+        # self.set_status("ready", "Ready")
 
         
     def load_folder(self):
