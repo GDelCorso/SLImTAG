@@ -54,6 +54,12 @@ Please note that the version numbers listed here refer to the environment in whi
 - screeninfo == 0.8.1 (recover screen info for UI management)
 - tomlkit == 0.14.0 (configuration file management)
 
+Biomedical loading/features:
+- pynrrd == 1.1.3 (load nrrd volumes/images)
+- nibabel == 5.4.2 (load nifti volumes/images)
+- pydicom == 3.0.2 (load dicom volumes/images)
+
+
 Also tkinter is required, but it cannot be installed via pip. On Windows it should be provided with Python; on Mac and Linux, you may need to install it through your system's package manager (e.g. `brew install python-tk` with homebrew for Mac, or `sudo apt install python3-tk` for Ubuntu-based Linux distros).
 
 ---
