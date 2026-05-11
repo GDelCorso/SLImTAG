@@ -22,6 +22,7 @@ import shutil
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion
 from scipy.special import expit # sigmoid
+from scipy.ndimage import binary_fill_holes
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
@@ -405,7 +406,7 @@ class SegmentationApp(ctk.CTk):
         self.create_tool_button("bucket", 0, 3, 0, last_row=True)
         self.create_tool_button("undo", 0, 3, 1, command=self.undo, last_row=True, help_text="Undo [Ctrl-Z]")
         self.create_tool_button("smooth", 1, 0, 0, help_text="Smooth [S]")
-        self.create_tool_button("fill", 1, 0, 1)
+        self.create_tool_button("fill", 1, 0, 1, help_text="Fill holes")
         self.create_tool_button("denoise", 1, 1, 0, last_row=True)
         self.create_tool_button("interpolate", 1, 1, 1, last_row=True)
         self.create_tool_button("wand", 2, 0, 0, help_text="Magic wand [M]")
@@ -1220,7 +1221,7 @@ class SegmentationApp(ctk.CTk):
             # TODO: deactivate the hard-coded always disabled
             always_disabled = [
                 "polygon", "bbox", "bucket",
-                "fill", "denoise", "interpolate",
+                "denoise", "interpolate",
                 "wand_all", "wand_box",
                 "ruler", "area",
                 "custom_1", "custom_2", "custom_3", "custom_4"
@@ -2015,6 +2016,10 @@ class SegmentationApp(ctk.CTk):
             self.connected_component_click(e, remove_only=(self.tool_active["cut"] and not shift_pressed))
             return
         
+        if (self.tool_active["fill"]) and check_inside_image:
+            self.fill_connected_component(e)
+            return
+        
         if self.tool_active["wand"] and check_inside_image:
             self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             return
@@ -2548,6 +2553,7 @@ class SegmentationApp(ctk.CTk):
         y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
         comp = self.get_connected_component(self.mask_orig, y, x, self.active_mask_id)
+        
         self.push_undo()
         
         # notice that "connected component" only acts on active mask,
@@ -2563,7 +2569,40 @@ class SegmentationApp(ctk.CTk):
         self.mask_locked[self.mask_orig==0] = False
         self.update_display(update_image=False)
         
-
+    def fill_connected_component(self, e):
+        '''
+        Fill connected component
+        '''
+        
+        if self.mask_orig is None or self.active_mask_id is None:
+            return
+        
+        x = int((e.x) * (self.view_w / self.canvas.winfo_width())) + self.view_x
+        y = int((e.y) * (self.view_h / self.canvas.winfo_height())) + self.view_y
+        
+        # Connected component of active mask
+        comp = self.get_connected_component(self.mask_orig, y, x, self.active_mask_id)
+         
+        # Save undo
+        self.push_undo()
+         
+        # Fill internal holes
+        filled_comp = binary_fill_holes(comp)
+        
+        
+        # Assign active mask label
+        self.mask_orig[filled_comp & (~self.mask_locked)] = self.active_mask_id
+         
+        self.set_modified(True)
+        
+        
+        # Update lock status #TODO - Oscar, check if correctly called mask locked
+        self.mask_locked[self.mask_orig == self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
+        self.mask_locked[self.mask_orig == 0] = False
+         
+        self.update_display(update_image=False)
+        
+        
     # SMOOTHING (EROSION + DILATION)
     def apply_smoothing(self, y, x, operation="dilation", size=3):
         '''
