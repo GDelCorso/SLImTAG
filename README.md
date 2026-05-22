@@ -15,7 +15,7 @@ Particular focus on:
 - [x] Preview multipoint improvement [Op]
 - [ ] Re-activate exitings tools in the novel graphical interface [All]
 - [ ] Define boundaries visualization [Fv]
-- [ ] Load fex example images/nrrds
+- [ ] Load few example images/nrrds
 
 
 # SLImTAG – Simple Light-weight Image TAGging tool
@@ -151,6 +151,7 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 | ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
 | ![Clean](images/doc/buttons/clean.png) **Clean** | Select/remove connected areas      | – | Keep only connected component | – |
 | ![Smoothing](images/doc/buttons/smooth.png) **Smoothing**           | Smooth component boundary   | <kbd>S</kbd> | Erode, then dilate                  | Dilate, then erode                         |
+| ![Fill holes](images/doc/buttons/fill.png) **Fill holes** | Fill internal holes in connected component | – | Fill | – |
 
 Options available for each tool appear on the right side of the interface, under the masks list.
 
@@ -188,7 +189,8 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 - [x] Implement configuration file that is checked at startup with all the parameters
 - [ ] Integrate PyInstaller and generate Windows binary (both with and without SAM)
 - [ ] ~~Convert hardcoded parameters to argparse arguments~~
-- [ ] Define an additional .csv containing name/mask value bindings for semantic segmentation when needed
+- [ ] ~~Define an additional .csv containing name/mask value bindings for semantic segmentation when needed~~
+- [x] Save mask names in PNG metadata
 - [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
 - [x] Move color picker to utils (and cleanup its code)
 - [x] When an image is loaded, add the file name to window title (e.g. "SLImTAG (model) - image_name.png", or "SLImTAG (model) [image_name.png]"). Maybe move model name to statusbar instead of window title?

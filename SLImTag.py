@@ -31,6 +31,9 @@ import screeninfo
 
 # Image manipulation and TkInter interaction (ImageTk)
 from PIL import Image, ImageDraw, ImageTk
+from PIL import PngImagePlugin
+
+import json
 
 # Configuration file management
 import tomlkit
@@ -445,7 +448,7 @@ class SegmentationApp(ctk.CTk):
         slider_frame = ctk.CTkFrame(volume_canvas_frame, corner_radius=0)
         slider_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
         slider_frame.grid_columnconfigure(0, weight=1)
-        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=120,
+        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=1,
                                                    command=lambda v: self.zlabel_var.set(f"z: {int(v)}")
                                                    )
         volume_canvas_frame.slider.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
@@ -1851,9 +1854,13 @@ class SegmentationApp(ctk.CTk):
             labels = np.unique(arr)
             labels = labels[labels != 0][:self.slimtag_config["mask"]["max_masks"]]
             palette = img.getpalette()
-            
-            for l in labels:
-                self.mask_labels[l] = f"mask_{l}"
+            try:
+                names = json.loads(img.text["labels"])
+            except KeyError:
+                names = {str(l): f"mask_{l}" for l in labels.tolist()}
+                
+            for l in labels.tolist():
+                self.mask_labels[l] = names[str(l)]#f"mask_{l}"
                 idx = l * 3
                 self.mask_colors[l] = tuple(palette[idx:idx+3])
                 self.mask_widgets[l] = self.create_mask_widget(l)
@@ -1884,11 +1891,16 @@ class SegmentationApp(ctk.CTk):
                     unique_colors.append(t)
                     if len(unique_colors) >= self.slimtag_config["mask"]["max_masks"]:
                         break
+
+            try:
+                names = json.loads(img.text["labels"])
+            except KeyError:
+                names = {str(l+1): f"mask_{l+1}" for l in range(len(unique_colors))}
             
             mask = np.zeros((h, w), np.uint8)
             for i, color in enumerate(unique_colors, 1):
                 mask[np.all(arr == color, axis=-1)] = i
-                self.mask_labels[i] = f"mask_{i}"
+                self.mask_labels[i] = names[str(i)]#f"mask_{i}"
                 self.mask_colors[i] = color
                 self.mask_widgets[i] = self.create_mask_widget(i)
                 self.mask_widgets[i].pack(fill="x", expand=True)
@@ -1943,7 +1955,13 @@ class SegmentationApp(ctk.CTk):
             palette[mid*3:mid*3+3] = list(color)
     
         mask_to_save.putpalette(palette)
-        mask_to_save.save(p)
+        
+        # save mask names in png metadata
+        metadata = PngImagePlugin.PngInfo()
+        labels = {i: self.mask_labels[i] for i in self.mask_labels.keys()}
+        metadata.add_text("labels", json.dumps(labels))
+        
+        mask_to_save.save(p, pnginfo=metadata)
         
         self.set_modified(False)
         self.set_status("ready", "Ready")
@@ -2023,6 +2041,7 @@ class SegmentationApp(ctk.CTk):
             self.zlabel_var.set(f"z: {initial_slice}")
         
         # normalize, cut intensity peaks
+        # do this also when volume is already uint8
         arr = volume.astype(np.float32)
         v_min, v_max = np.percentile(arr, (1, 99))
         self.volume_disp = (255 * np.clip((arr - v_min) / (v_max - v_min), 0, 1)).astype(np.uint8)
