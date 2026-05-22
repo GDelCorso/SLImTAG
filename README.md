@@ -54,7 +54,8 @@ Please note that the version numbers listed here refer to the environment in whi
 - screeninfo == 0.8.1 (recover screen info for UI management)
 - tomlkit == 0.14.0 (configuration file management)
 
-Biomedical loading/features:
+For biomedical loading/features:
+
 - pynrrd == 1.1.3 (load nrrd volumes/images)
 - nibabel == 5.4.2 (load nifti volumes/images)
 - pydicom == 3.0.2 (load dicom volumes/images)
