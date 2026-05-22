@@ -130,11 +130,16 @@ class SegmentationApp(ctk.CTk):
         self.preview_scale = 1.0
         # Matrix of locked masks
         self.mask_locked = None
+        
+        # Biomedical dictionary
+        self.biomedical_data = {"metadata": None, "spacing": None, "volume": None}
 
         # aux display variables
         self.tk_ov = None
         self.sam_preview_pil = None
         self.tk_sam_preview = None
+        self.volume_disp = None # volume display casted as uint8 array
+        self.is_volume_loaded = False # boolean switch to check if a volume is loaded
         
         # to keep track of delayed events
         self.resizing_event = None
@@ -147,15 +152,17 @@ class SegmentationApp(ctk.CTk):
         
         # zoom & pan status
         self.zoom = 1.0
-        self.zoom_max = 1.0
-        self.zoom_min = 1.0
         self._pan_start = None
         monitor_dims = sum([[m.width, m.height] for m in screeninfo.get_monitors()], [])
         self.min_monitor_dim = min(monitor_dims)
         self.max_monitor_dim = max(monitor_dims)
+        # Define a max and min zoom
+        self.zoom_max = self.min_monitor_dim / self.slimtag_config["view"]["zoom"]["max_pixel"]
+        self.zoom_min = self.max_monitor_dim / self.slimtag_config["view"]["zoom"]["min_pixel"]
         
         # labels for zoom and mouse position
-        self.pos_label_var = tk.StringVar(self, value="| x: 0 | y: 0 | z: 0 |")
+        self.pos_label_var = tk.StringVar(self, value="| x: 0 | y: 0 |")
+        self.zlabel_var = tk.StringVar(self, value="z: 0")
         self.zoom_label_var = tk.StringVar(self, value="Zoom: 100%")
         
         # Original values for rescale
@@ -320,9 +327,9 @@ class SegmentationApp(ctk.CTk):
 
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
-        image_menu.add_command(label="Import image", command=self.load_image, accelerator="Ctrl+I")
+        image_menu.add_command(label="Import image", command=self.open_image, accelerator="Ctrl+I")
         # TODO: maybe move biomedical stuff to its own submenu? so it is easier to manage in modular padadigm (just disable entire biomedical submenu instead of single entries in several menus)
-        image_menu.add_command(label="Import NRRD/NIFTI/DICOM", command=self.load_biomedical, accelerator="Ctrl+B")
+        image_menu.add_command(label="Import NRRD/NIFTI/DICOM", command=self.biomedical_load)
         image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F", state="disabled")
         # TODO reactivate import folder
         self.topmenu_items["image"] = image_menu
@@ -358,7 +365,7 @@ class SegmentationApp(ctk.CTk):
         #%% Main UI elements
         panels_width = 250
         # Left panel for tools
-        self.left_panel = ctk.CTkFrame(self, width=panels_width)
+        self.left_panel = ctk.CTkFrame(self, width=panels_width, corner_radius=0)
         self.left_panel.grid(row=0, column=0, sticky="nsew")
         self.left_panel.grid_rowconfigure(5, weight=1)
         
@@ -369,17 +376,15 @@ class SegmentationApp(ctk.CTk):
         self.main_canvas_frame.grid(row=0, column=1, sticky="nsew")
         self.main_canvas_frame.grid_rowconfigure(0, weight=1)
         self.main_canvas_frame.grid_columnconfigure(0, weight=1)
-        self.canvas = ctk.CTkCanvas(self.main_canvas_frame, bg="black", highlightthickness=0)
-        self.canvas.grid(row=0, column=0, sticky="nsew")
         
         # Right panel for masks
-        self.right_panel = ctk.CTkFrame(self, width=panels_width)
+        self.right_panel = ctk.CTkFrame(self, width=panels_width, corner_radius=0)
         self.right_panel.grid(row=0, column=2, sticky="nsew")
         self.right_panel.grid_rowconfigure(1, weight=1)
         self.right_panel.grid_rowconfigure(2, weight=2)
         
         # Statusbar
-        self.statusbar = ctk.CTkFrame(self, height=32, fg_color=("gray92", "gray14"))
+        self.statusbar = ctk.CTkFrame(self, height=32, fg_color=("gray92", "gray14"), corner_radius=0)
         self.statusbar.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=0, pady=0)
         self.statusbar.grid_columnconfigure(3, weight=1)
         
@@ -419,6 +424,40 @@ class SegmentationApp(ctk.CTk):
         self.create_tool_button("custom_2", 4, 0, 1, None)
         self.create_tool_button("custom_3", 4, 1, 0, None, last_row=True)
         self.create_tool_button("custom_4", 4, 1, 1, None, last_row=True)
+        
+        #%% Main view: Canvas
+        self.canvas_frames = {}
+        
+        default_canvas_frame = ctk.CTkFrame(self.main_canvas_frame, fg_color="transparent")
+        default_canvas_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        default_canvas_frame.grid_rowconfigure(0, weight=1)
+        default_canvas_frame.grid_columnconfigure(0, weight=1)
+        default_canvas_frame.canvas = ctk.CTkCanvas(default_canvas_frame, bg="black", highlightthickness=0)
+        default_canvas_frame.canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas_frames["default"] = default_canvas_frame
+        
+        volume_canvas_frame = ctk.CTkFrame(self.main_canvas_frame, fg_color="transparent")
+        volume_canvas_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        volume_canvas_frame.grid_rowconfigure(0, weight=1)
+        volume_canvas_frame.grid_columnconfigure(0, weight=1)
+        volume_canvas_frame.canvas = ctk.CTkCanvas(volume_canvas_frame, bg="black", highlightthickness=0)
+        volume_canvas_frame.canvas.grid(row=0, column=0, sticky="nsew")
+        slider_frame = ctk.CTkFrame(volume_canvas_frame, corner_radius=0)
+        slider_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        slider_frame.grid_columnconfigure(0, weight=1)
+        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=120,
+                                                   command=lambda v: self.zlabel_var.set(f"z: {int(v)}")
+                                                   )
+        volume_canvas_frame.slider.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        volume_canvas_frame.slider.set(0)
+        volume_canvas_frame.slider.bind("<ButtonRelease-1>", lambda e: self.set_volume_slice(int(volume_canvas_frame.slider.get())))
+        volume_canvas_frame.zlabel = ctk.CTkLabel(slider_frame, textvariable=self.zlabel_var, anchor="w", width=40)
+        volume_canvas_frame.zlabel.grid(row=0, column=1, sticky="e", padx=(0, 10))
+        self.canvas_frames["volume"] = volume_canvas_frame
+        
+        # default view
+        self.canvas = None
+        self.show_canvas_frame("default")
         
         #%% Right panel: Masks
         # Global masks buttons
@@ -675,21 +714,6 @@ class SegmentationApp(ctk.CTk):
         self.set_controls_state(False) # Deactivate all buttons -- must be done after defining switch_computed_magic_wand
 
         #%% Bindings
-        self.canvas.bind("<MouseWheel>", self.zoom_evt)
-        self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
-        self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
-        self.canvas.bind("<Motion>", self.draw_brush_preview, add="+")
-        self.canvas.bind("<Motion>", self.on_canvas_track, add="+")
-        self.canvas.bind("<Button-1>", self.on_canvas_left)
-        self.canvas.bind("<Button-2>", self.on_canvas_mid)
-        self.canvas.bind("<Button-3>", self.on_canvas_right)
-        self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
-        self.canvas.bind("<B2-Motion>", self.on_canvas_drag)
-        self.canvas.bind("<B3-Motion>", self.on_canvas_drag)
-        self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
-        self.canvas.bind("<ButtonRelease-2>", self.on_canvas_mid_release)
-        self.canvas.bind("<ButtonRelease-3>", self.on_canvas_right_release)
-        
         # Zoom via keyboard (Ctrl + / Ctrl -)
         self.bind("<Control-plus>", lambda e: self.zoom_in())
         self.bind("<Control-0>", self.reset_zoom)
@@ -728,8 +752,8 @@ class SegmentationApp(ctk.CTk):
         self.bind("<N>", lambda e: self.add_mask())
         self.bind("<Control-z>", lambda e: self.undo())
         self.bind("<Control-Z>", lambda e: self.undo())
-        self.bind("<Control-I>", lambda e: self.load_image())
-        self.bind("<Control-i>", lambda e: self.load_image())
+        self.bind("<Control-I>", lambda e: self.open_image())
+        self.bind("<Control-i>", lambda e: self.open_image())
         #self.bind("<Control-F>", lambda e: self.load_folder()) # TODO reactivate load folder
         #self.bind("<Control-f>", lambda e: self.load_folder())
         self.bind("<Control-S>", lambda e: self.save_mask(switch_fast=True))
@@ -949,7 +973,7 @@ class SegmentationApp(ctk.CTk):
                                      buttons=[("Import image...", "import"), ("Cancel", None)])
             action = warn.return_value
             if action == "import":
-                self.load_image(add_mask=False)
+                self.open_image(add_mask=False)
             else:
                 return False
         return True
@@ -1184,6 +1208,34 @@ class SegmentationApp(ctk.CTk):
                     pt_out = "#" + "".join([f"{255-c:02x}" for c in self.mask_colors[self.active_mask_id]])
                 self.canvas.create_oval(x-3, y-3, x+3, y+3, fill=pt_fill, outline=pt_out, width=1, tag="sam_pt")
         self.canvas.tag_raise("sam_pt")
+    
+    #%% UI CANVAS METHODS
+    def show_canvas_frame(self, frametype):
+        frame = self.canvas_frames[frametype]
+        self.canvas = frame.canvas
+        # bind events to currently visible canvas
+        self.canvas.bind("<MouseWheel>", self.zoom_evt)
+        self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
+        self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
+        self.canvas.bind("<Motion>", self.draw_brush_preview, add="+")
+        self.canvas.bind("<Motion>", self.on_canvas_track, add="+")
+        self.canvas.bind("<Button-1>", self.on_canvas_left)
+        self.canvas.bind("<Button-2>", self.on_canvas_mid)
+        self.canvas.bind("<Button-3>", self.on_canvas_right)
+        self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<B2-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<B3-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_canvas_left_release)
+        self.canvas.bind("<ButtonRelease-2>", self.on_canvas_mid_release)
+        self.canvas.bind("<ButtonRelease-3>", self.on_canvas_right_release)
+        frame.tkraise()
+    
+    def set_volume_slice(self, i):
+        if not self.is_volume_loaded:
+            return
+        
+        img = Image.fromarray(self.volume_disp[..., i]).convert("RGB")
+        self.load_image(img, reset_view=False) # don't change canvas, don't reset view
 
     #%% UI TOOLS METHODS
     def show_tool_frame(self, tool):
@@ -1581,7 +1633,50 @@ class SegmentationApp(ctk.CTk):
                 self.mask_locked[self.mask_orig==mid] = True
 
     #%% LOAD & SAVE METHODS
-    def load_image(self, path=None, add_mask=True):
+    def load_image(self, pil_image, change_canvas=None, reset_view=True):
+        '''
+        Load the current image in memory as self.image_orig and display it.
+        
+        Takes a PIL image as input, which can be provided by the several load_*
+        methods.
+        
+        If change_canvas is not None, it is a string among keys of self.canvas_frames
+        '''
+        self.orig_w, self.orig_h = pil_image.size
+        self.image_orig = pil_image
+        self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
+        self.mask_locked = np.full(self.mask_orig.shape, False)
+        self.sam_preview = np.full(self.mask_orig.shape, False)
+
+        # Async load of the SAM model to avoid freezed interface
+        if self.thread is None or not self.thread.is_alive():
+            self.thread = threading.Thread(target=self.async_loader, daemon=True)
+            self.thread.start()
+
+
+
+        # raise canvas
+        # TODO: folder management -- raise appropriate canvas
+        if change_canvas is not None:
+            self.show_canvas_frame(change_canvas)
+        
+        self.update_idletasks()
+        
+        if reset_view:
+            # reset zoom
+            self.zoom = 1.0
+            # define the view parameters (equal to the canvas size)
+            self.view_x = 0
+            self.view_y = 0
+            self.view_w = self.canvas.winfo_width()
+            self.view_h = self.canvas.winfo_height()
+        
+        self.update_display(update_image=True)
+        
+        self.show_preview_frame("image")
+        self.update_preview_frame()
+    
+    def open_image(self, path=None, add_mask=True):
         '''
         Load a .png or .jpg image and define an empty mask on it.
         '''
@@ -1619,45 +1714,23 @@ class SegmentationApp(ctk.CTk):
         self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
 
         self.set_status("loading", "Loading image...")
-        img = Image.open(p).convert("RGB")
-        self.orig_w, self.orig_h = img.size
-        self.image_orig = img
-        self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
-        self.mask_locked = np.full(self.mask_orig.shape, False)
-        self.sam_preview = np.full(self.mask_orig.shape, False)
-        
-        self.update_title()
-        # Async load of the SAM model to avoid freezed interface
-        if self.thread is None or not self.thread.is_alive():
-            self.thread = threading.Thread(target=self.async_loader, daemon=True)
-            self.thread.start()
         
         # reset masks
         self.clear_all_masks()
         
-        # reset zoom
-        self.zoom = 1.0
-        # Define a max and min zoom
-        self.zoom_max = self.min_monitor_dim / self.slimtag_config["view"]["zoom"]["max_pixel"]
-        self.zoom_min = self.max_monitor_dim / self.slimtag_config["view"]["zoom"]["min_pixel"]
-
+        img = Image.open(p).convert("RGB")
+        
+        self.load_image(img, change_canvas="default")
+        
+        self.update_title()
+        
         # reset history
         self.undo_stack.clear()
-        
-        # Define the view parameters (equal to the canvas size):
-        self.update_idletasks()
-        self.view_x = 0
-        self.view_y = 0
-        self.view_w = self.canvas.winfo_width()
-        self.view_h = self.canvas.winfo_height()
         
         if add_mask:
             self.add_mask("mask_1")
         
-        self.update_display(update_image=True)
-        
-        self.show_preview_frame("image")
-        self.update_preview_frame()
+
         
         if self.list_images is None:
             self.images_num_label_var.set("Image 1 of 1")
@@ -1669,7 +1742,7 @@ class SegmentationApp(ctk.CTk):
         
         self.set_status("ready", "Ready")
         
-    def load_folder(self):
+    def load_folder(self): # TODO rewrite open folder
         '''
         Aux function to load a whole folder to speed up image segmentation
         '''
@@ -1711,7 +1784,7 @@ class SegmentationApp(ctk.CTk):
         self.set_status("loading", "Loading image...")
 
         
-        self.load_image(path=self.list_images[self.list_index])
+        self.open_image(path=self.list_images[self.list_index])
         
         self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
         self.next_image_btn.configure(state="disabled") # Originally disabled
@@ -1733,7 +1806,7 @@ class SegmentationApp(ctk.CTk):
             
             self.list_index += 1
         
-            self.load_image(path=self.list_images[self.list_index])
+            self.open_image(path=self.list_images[self.list_index])
             
             self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
             
@@ -1743,7 +1816,7 @@ class SegmentationApp(ctk.CTk):
             
             self.set_status("ready", "Ready")
 
-    def load_mask(self):
+    def load_mask(self): # TODO rename "open mask"?
         """
         Upload an existing mask
         - Indexed PNG (mode "P"): direct recovery of mask indices.
@@ -1877,7 +1950,7 @@ class SegmentationApp(ctk.CTk):
 
 #%% BIOMEDICAL LOAD
 
-    def load_biomedical(self, path=None, add_mask=True):
+    def biomedical_load(self, path=None, add_mask=True):
         '''
         Load a DICOM/NIFTI/NRRD image and define an empty mask on it.
         '''
@@ -1915,72 +1988,70 @@ class SegmentationApp(ctk.CTk):
         self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
     
         self.set_status("loading", "Loading image...")
-        
+
+        # reset masks
+        self.clear_all_masks()
         
         metadata, spacing, volume = load_medical_volume(p)
+        self.biomedical_data["metadata"] = metadata
+        self.biomedical_data["spacing"] = spacing
+        self.biomedical_data["volume"] = volume
         
-        print("Metadata:")
-        print(metadata)
+        # TODO debug, remove
+        # print("Metadata:")
+        # print(metadata)
     
-        print("\nSpacing:")
-        print(spacing)
+        # print("\nSpacing:")
+        # print(spacing)
     
-        print("\nVolume shape:")
-        print(volume.shape)
+        # print("\nVolume shape:")
+        # print(volume.shape)
     
-        print("\nData type:")
-        print(volume.dtype)
-        #TODO: Integrate with the 3D visual 
-        # img = Image.open(p).convert("RGB")
+        # print("\nData type:")
+        # print(volume.dtype)
         
-        # self.orig_w, self.orig_h = img.size
-        # self.image_orig = img
-        # self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
-        # self.mask_locked = np.full(self.mask_orig.shape, False)
-        # self.sam_preview = np.full(self.mask_orig.shape, False)
+        if volume.shape[2] == 1:
+            canvas_frame = "default"
+            initial_slice = 0
+            self.is_volume_loaded = False
+        else:
+            canvas_frame = "volume"
+            initial_slice = volume.shape[2] // 2
+            self.is_volume_loaded = True
+            self.canvas_frames["volume"].slider.configure(to=volume.shape[2]-1, number_of_steps=volume.shape[2])
+            self.canvas_frames["volume"].slider.set(initial_slice)
+            self.zlabel_var.set(f"z: {initial_slice}")
         
-        # self.update_title()
-        # # Async load of the SAM model to avoid freezed interface
-        # if self.thread is None or not self.thread.is_alive():
-        #     self.thread = threading.Thread(target=self.async_loader, daemon=True)
-        #     self.thread.start()
+        # normalize, cut intensity peaks
+        arr = volume.astype(np.float32)
+        v_min, v_max = np.percentile(arr, (1, 99))
+        self.volume_disp = (255 * np.clip((arr - v_min) / (v_max - v_min), 0, 1)).astype(np.uint8)
+
+        img = Image.fromarray(self.volume_disp[..., initial_slice]).convert("RGB")
+        self.load_image(img, change_canvas=canvas_frame)
         
-        # # reset masks
-        # self.clear_all_masks()
+        self.update_title()
+
+        # reset history
+        self.undo_stack.clear()
         
-        # # reset zoom
-        # self.zoom = 1.0
-        # # Define a max and min zoom
-        # self.zoom_max = self.min_monitor_dim / self.slimtag_config["view"]["zoom"]["max_pixel"]
-        # self.zoom_min = self.max_monitor_dim / self.slimtag_config["view"]["zoom"]["min_pixel"]
+        if add_mask:
+            self.add_mask("mask_1")
+        
+        self.update_display(update_image=True)
+        
+        self.show_preview_frame("image")
+        self.update_preview_frame()
+        
+        if self.list_images is None:
+            self.images_num_label_var.set("Image 1 of 1")
+            #self.next_image_btn.configure(state="disabled")
+            # TODO image navigation
     
-        # # reset history
-        # self.undo_stack.clear()
+        self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
-        # # Define the view parameters (equal to the canvas size):
-        # self.update_idletasks()
-        # self.view_x = 0
-        # self.view_y = 0
-        # self.view_w = self.canvas.winfo_width()
-        # self.view_h = self.canvas.winfo_height()
-        
-        # if add_mask:
-        #     self.add_mask("mask_1")
-        
-        # self.update_display(update_image=True)
-        
-        # self.show_preview_frame("image")
-        # self.update_preview_frame()
-        
-        # if self.list_images is None:
-        #     self.images_num_label_var.set("Image 1 of 1")
-        #     #self.next_image_btn.configure(state="disabled")
-        #     # TODO image navigation
-    
-        # self.toggle_all_masks_hide(set_hide=False, enabled=True)
-        # self.toggle_all_masks_lock(set_lock=False, enabled=True)
-        
-        # self.set_status("ready", "Ready")
+        self.set_status("ready", "Ready")
 
 
     #%% MOUSE EVENTS
@@ -2141,8 +2212,7 @@ class SegmentationApp(ctk.CTk):
         x1 = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y1 = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
-        # TODO implement z change
-        self.pos_label_var.set(f"| x: {x1} | y: {y1} | z: 0 |")
+        self.pos_label_var.set(f"| x: {x1} | y: {y1} |")
 
     #%% KEYBOARD EVENTS
     def shiftPressed(self):

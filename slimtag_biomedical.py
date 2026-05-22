@@ -218,7 +218,7 @@ def load_DICOM(path):
 
         images = [s.pixel_array for s in slices]
 
-        volume = np.stack(images, axis=0)
+        volume = np.stack(images, axis=2)
 
         return metadata, spacing, volume
 
@@ -251,7 +251,7 @@ def load_DICOM(path):
         return metadata, spacing, volume
 
     # Single slice
-    volume = ds.pixel_array[np.newaxis, :, :]
+    volume = ds.pixel_array[:, :, np.newaxis]
 
     spacing = (dx, dy, 1.0)
 
@@ -295,7 +295,7 @@ def load_NRRD(path):
 
     # Ensure 3D
     if volume.ndim == 2:
-        volume = volume[np.newaxis, :, :]
+        volume = volume[:, :, np.newaxis]
 
     spacing = get_spacing_NRRD(header)
 
@@ -321,7 +321,7 @@ def load_NIFTI(path):
 
     # Ensure 3D
     if volume.ndim == 2:
-        volume = volume[np.newaxis, :, :]
+        volume = volume[:, :, np.newaxis]
 
     hdr = nii.header
 
