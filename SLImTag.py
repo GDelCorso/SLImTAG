@@ -452,7 +452,7 @@ class SegmentationApp(ctk.CTk):
         slider_frame = ctk.CTkFrame(volume_canvas_frame, corner_radius=0)
         slider_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
         slider_frame.grid_columnconfigure(0, weight=1)
-        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=1, command=lambda v: self.on_zslider_move(int(v)))
+        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=1, command=lambda v: self.on_zslider_move(round(v)))
         volume_canvas_frame.slider.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         volume_canvas_frame.slider.set(0)
         volume_canvas_frame.slider.bind("<Button-1>", self.start_zlider_preview)
@@ -1287,8 +1287,9 @@ class SegmentationApp(ctk.CTk):
 
     def update_zslider_preview_position(self):
         '''
-        Update preview window position based on knob position and slider dimensions
+        Update preview window position based on knob position and slider dimensions.
         '''
+        self.update_idletasks()
         # recover slider dimensions
         slider_x = self.volume_zslider.winfo_rootx()
         slider_y = self.volume_zslider.winfo_rooty()
@@ -1321,12 +1322,12 @@ class SegmentationApp(ctk.CTk):
             self.zslider_preview = ctk.CTkToplevel(self)
             self.zslider_preview.overrideredirect(True) # remove window decorations
             self.zslider_preview.attributes("-topmost", True) # shadow-like appearance
-            self.zslider_preview.canvas = ctk.CTkCanvas(self.zslider_preview, highlightthickness=0)
+            self.zslider_preview.canvas = ctk.CTkCanvas(self.zslider_preview, highlightthickness=0,
+                                                        width=self.volume_preview.shape[1], height=self.volume_preview.shape[0])
             self.zslider_preview.canvas.grid(row=0, column=0, padx=4, pady=4)
             self.zslider_preview.grid_rowconfigure(0, weight=1)
             self.zslider_preview.grid_columnconfigure(0, weight=1)
-            self.zslider_preview.geometry(f"{self.volume_preview.shape[1]+8}x{self.volume_preview.shape[0]+8}")
-            self.update_zslider_preview_position()
+            
         # call this once to set initial values
         self.move_zslider_preview(event)
     
@@ -1336,7 +1337,7 @@ class SegmentationApp(ctk.CTk):
         
         It moves the preview window and updates its content.
         '''
-        z = int(self.volume_zslider.get())
+        z = round(self.volume_zslider.get())
         self.update_zslider_preview(z)
         self.update_zslider_preview_position()
     
@@ -1348,7 +1349,7 @@ class SegmentationApp(ctk.CTk):
         
         z is the slider value, already cast to int.
         '''
-        z = int(self.volume_zslider.get())
+        z = round(self.volume_zslider.get())
         self.set_volume_slice(z)
         # destroy preview
         if self.zslider_preview is not None:
@@ -2151,7 +2152,7 @@ class SegmentationApp(ctk.CTk):
             canvas_frame = "volume"
             initial_slice = volume.shape[2] // 2
             self.is_volume_loaded = True
-            self.canvas_frames["volume"].slider.configure(to=volume.shape[2]-1, number_of_steps=volume.shape[2])
+            self.canvas_frames["volume"].slider.configure(to=volume.shape[2]-1)
             self.canvas_frames["volume"].slider.set(initial_slice)
             self.zlabel_var.set(f"z: {initial_slice}")
         
