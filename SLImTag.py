@@ -142,6 +142,10 @@ class SegmentationApp(ctk.CTk):
         self.sam_preview_pil = None
         self.tk_sam_preview = None
         self.volume_disp = None # volume display casted as uint8 array
+        self.volume_preview = None # resized volume for fast slider preview
+        self.volume_zslider = None
+        self.zslider_preview = None # TopLevel object that contains slider preview
+        self.zslider_preview_img = None # preview image, to prevent it from being garbage collected
         self.is_volume_loaded = False # boolean switch to check if a volume is loaded
         
         # to keep track of delayed events
@@ -448,12 +452,12 @@ class SegmentationApp(ctk.CTk):
         slider_frame = ctk.CTkFrame(volume_canvas_frame, corner_radius=0)
         slider_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
         slider_frame.grid_columnconfigure(0, weight=1)
-        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=1,
-                                                   command=lambda v: self.zlabel_var.set(f"z: {int(v)}")
-                                                   )
+        volume_canvas_frame.slider = ctk.CTkSlider(slider_frame, from_=0, to=1, command=lambda v: self.on_zslider_move(int(v)))
         volume_canvas_frame.slider.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         volume_canvas_frame.slider.set(0)
-        volume_canvas_frame.slider.bind("<ButtonRelease-1>", lambda e: self.set_volume_slice(int(volume_canvas_frame.slider.get())))
+        volume_canvas_frame.slider.bind("<Button-1>", self.start_zlider_preview)
+        volume_canvas_frame.slider.bind("<B1-Motion>", self.move_zslider_preview)
+        volume_canvas_frame.slider.bind("<ButtonRelease-1>", self.end_zslider_preview)
         volume_canvas_frame.zlabel = ctk.CTkLabel(slider_frame, textvariable=self.zlabel_var, anchor="w", width=40)
         volume_canvas_frame.zlabel.grid(row=0, column=1, sticky="e", padx=(0, 10))
         self.canvas_frames["volume"] = volume_canvas_frame
@@ -1214,17 +1218,35 @@ class SegmentationApp(ctk.CTk):
     
     #%% UI CANVAS METHODS
     def show_canvas_frame(self, frametype):
+        # unbind events to currently visible canvas
+        if self.canvas is not None:
+            self.canvas.unbind("<Button-1>")
+            self.canvas.unbind("<Button-2>")
+            self.canvas.unbind("<Button-3>")
+            self.canvas.unbind("<Button-4>")
+            self.canvas.unbind("<Button-5>")
+            self.canvas.unbind("<MouseWheel>")
+            self.canvas.unbind("<Motion>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<B2-Motion>")
+            self.canvas.unbind("<B3-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
+            self.canvas.unbind("<ButtonRelease-2>")
+            self.canvas.unbind("<ButtonRelease-3>")
+        # change canvas
         frame = self.canvas_frames[frametype]
         self.canvas = frame.canvas
-        # bind events to currently visible canvas
-        self.canvas.bind("<MouseWheel>", self.zoom_evt)
-        self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
-        self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
-        self.canvas.bind("<Motion>", self.draw_brush_preview, add="+")
-        self.canvas.bind("<Motion>", self.on_canvas_track, add="+")
+        if frametype == "volume":
+            self.volume_zslider = frame.slider
+        # bind events to newly visible canvas
         self.canvas.bind("<Button-1>", self.on_canvas_left)
         self.canvas.bind("<Button-2>", self.on_canvas_mid)
         self.canvas.bind("<Button-3>", self.on_canvas_right)
+        self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
+        self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
+        self.canvas.bind("<MouseWheel>", self.zoom_evt)
+        self.canvas.bind("<Motion>", self.draw_brush_preview, add="+")
+        self.canvas.bind("<Motion>", self.on_canvas_track, add="+")
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.canvas.bind("<B2-Motion>", self.on_canvas_drag)
         self.canvas.bind("<B3-Motion>", self.on_canvas_drag)
@@ -1233,12 +1255,105 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<ButtonRelease-3>", self.on_canvas_right_release)
         frame.tkraise()
     
-    def set_volume_slice(self, i):
+    def set_volume_slice(self, z):
         if not self.is_volume_loaded:
             return
         
-        img = Image.fromarray(self.volume_disp[..., i]).convert("RGB")
+        img = Image.fromarray(self.volume_disp[..., z]).convert("RGB")
         self.load_image(img, reset_view=False) # don't change canvas, don't reset view
+
+    def on_zslider_move(self, z):
+        '''
+        Update slider preview when moving.
+        
+        This is the argument of 'command=' of the slider.
+        
+        z is already cast to int.
+        '''
+        self.zlabel_var.set(f"z: {z}")
+        if self.zslider_preview is not None:
+            self.update_zslider_preview(z)
+
+    def update_zslider_preview(self, z):
+        '''
+        Function that actually changes the image in the preview depending on z value.
+        
+        z is the slider value, already cast to int.
+        '''
+        arr = self.volume_preview[:, :, z]
+        self.zslider_preview_img = ImageTk.PhotoImage(Image.fromarray(arr))
+        self.zslider_preview.canvas.delete("all")
+        self.zslider_preview.canvas.create_image(0, 0, anchor="nw", image=self.zslider_preview_img)
+
+    def update_zslider_preview_position(self):
+        '''
+        Update preview window position based on knob position and slider dimensions
+        '''
+        # recover slider dimensions
+        slider_x = self.volume_zslider.winfo_rootx()
+        slider_y = self.volume_zslider.winfo_rooty()
+        slider_w = self.volume_zslider.winfo_width()
+        slider_h = self.volume_zslider.winfo_height()
+        # get fraction of slider length corresponding to knob position
+        min_val = self.volume_zslider.cget("from_")
+        max_val = self.volume_zslider.cget("to")
+        frac = (self.volume_zslider.get() - min_val) / (max_val - min_val)
+        # compute actual position
+        knob_radius = slider_h / 2
+        usable_width = slider_w - 2 * knob_radius
+        # x position
+        preview_xc = slider_x + knob_radius + frac * usable_width # x of center
+        preview_w = self.zslider_preview.winfo_width()
+        x = int(preview_xc - preview_w / 2)
+        # y position
+        preview_h = self.zslider_preview.winfo_height()
+        y = slider_y - (preview_h + 20) # padding of 20 px
+        self.zslider_preview.geometry(f"+{x}+{y}")
+
+    def start_zlider_preview(self, event):
+        '''
+        Function executed at <Button1> event on the slider.
+        
+        It creates the TopLevel object containing the preview.
+        '''
+        # create TopLevel if it does not exist
+        if self.zslider_preview is None:
+            self.zslider_preview = ctk.CTkToplevel(self)
+            self.zslider_preview.overrideredirect(True) # remove window decorations
+            self.zslider_preview.attributes("-topmost", True) # shadow-like appearance
+            self.zslider_preview.canvas = ctk.CTkCanvas(self.zslider_preview, highlightthickness=0)
+            self.zslider_preview.canvas.grid(row=0, column=0, padx=4, pady=4)
+            self.zslider_preview.grid_rowconfigure(0, weight=1)
+            self.zslider_preview.grid_columnconfigure(0, weight=1)
+            self.zslider_preview.geometry(f"{self.volume_preview.shape[1]+8}x{self.volume_preview.shape[0]+8}")
+            self.update_zslider_preview_position()
+        # call this once to set initial values
+        self.move_zslider_preview(event)
+    
+    def move_zslider_preview(self, event):
+        '''
+        Function executed at <Button1-Motion> event on the slider.
+        
+        It moves the preview window and updates its content.
+        '''
+        z = int(self.volume_zslider.get())
+        self.update_zslider_preview(z)
+        self.update_zslider_preview_position()
+    
+    def end_zslider_preview(self, event):
+        '''
+        Function executed at <Button1-Release> event on the slider.
+        
+        It updates the main canvas and destroys the preview window.
+        
+        z is the slider value, already cast to int.
+        '''
+        z = int(self.volume_zslider.get())
+        self.set_volume_slice(z)
+        # destroy preview
+        if self.zslider_preview is not None:
+            self.zslider_preview.destroy()
+            self.zslider_preview = None
 
     #%% UI TOOLS METHODS
     def show_tool_frame(self, tool):
@@ -2005,7 +2120,7 @@ class SegmentationApp(ctk.CTk):
         self.path_original_image = p
         self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
     
-        self.set_status("loading", "Loading image...")
+        self.set_status("loading", "Loading volume...")
 
         # reset masks
         self.clear_all_masks()
@@ -2045,6 +2160,12 @@ class SegmentationApp(ctk.CTk):
         arr = volume.astype(np.float32)
         v_min, v_max = np.percentile(arr, (1, 99))
         self.volume_disp = (255 * np.clip((arr - v_min) / (v_max - v_min), 0, 1)).astype(np.uint8)
+        
+        if self.is_volume_loaded:
+            scale = max(self.volume_disp.shape[0], self.volume_disp.shape[1]) / self.slimtag_config["view"]["preview_dim"]
+            new_x = np.linspace(0, self.volume_disp.shape[0]-1, int(self.volume_disp.shape[0] / scale)).astype(np.int32)
+            new_y = np.linspace(0, self.volume_disp.shape[1]-1, int(self.volume_disp.shape[1] / scale)).astype(np.int32)
+            self.volume_preview = self.volume_disp[np.ix_(new_x, new_y)]
 
         img = Image.fromarray(self.volume_disp[..., initial_slice]).convert("RGB")
         self.load_image(img, change_canvas=canvas_frame)

@@ -28,7 +28,7 @@ import nibabel as nib # NIFTI
 
 
 
-#%% Main auto-loader function (DICOM/NRRD/NIFTI))
+#%% Main auto-loader function (DICOM/NRRD/NIFTI)
 def load_medical_volume(path):
 
     # If a DICOM directory is provided
