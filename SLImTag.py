@@ -142,6 +142,7 @@ class SegmentationApp(ctk.CTk):
         self.sam_preview_pil = None
         self.tk_sam_preview = None
         self.volume_disp = None # volume display casted as uint8 array
+        self.volume_mask = None # 3D numpy array for volume masks
         self.volume_preview = None # resized volume for fast slider preview
         self.volume_zslider = None
         self.zslider_preview = None # TopLevel object that contains slider preview
@@ -1260,7 +1261,7 @@ class SegmentationApp(ctk.CTk):
             return
         
         img = Image.fromarray(self.volume_disp[..., z]).convert("RGB")
-        self.load_image(img, reset_view=False) # don't change canvas, don't reset view
+        self.load_image(img, mask=self.volume_mask[..., z], reset_view=False) # don't change canvas, don't reset view
 
     def on_zslider_move(self, z):
         '''
@@ -1752,19 +1753,28 @@ class SegmentationApp(ctk.CTk):
                 self.mask_locked[self.mask_orig==mid] = True
 
     #%% LOAD & SAVE METHODS
-    def load_image(self, pil_image, change_canvas=None, reset_view=True):
+    def load_image(self, pil_image, mask=None, change_canvas=None, reset_view=True):
         '''
         Load the current image in memory as self.image_orig and display it.
         
         Takes a PIL image as input, which can be provided by the several load_*
         methods.
         
+        If mask is None, create new zero mask array; otherwise this is a uint8 array
+        with the same shape as the image. Used e.g. to load masks corresponding to
+        different volume slices.
+        
         If change_canvas is not None, it is a string among keys of self.canvas_frames
         '''
         self.orig_w, self.orig_h = pil_image.size
         self.image_orig = pil_image
-        self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
-        self.mask_locked = np.full(self.mask_orig.shape, False)
+        if mask is None:
+            self.mask_orig = np.zeros((self.orig_h, self.orig_w), np.uint8)
+            self.mask_locked = np.full(self.mask_orig.shape, False)
+        else:
+            self.mask_orig = mask
+            self.mask_locked = np.full(self.mask_orig.shape, False)
+            self.update_lock()
         self.sam_preview = np.full(self.mask_orig.shape, False)
 
         # Async load of the SAM model to avoid freezed interface
@@ -2148,6 +2158,7 @@ class SegmentationApp(ctk.CTk):
             canvas_frame = "default"
             initial_slice = 0
             self.is_volume_loaded = False
+            slice_mask = None
         else:
             canvas_frame = "volume"
             initial_slice = volume.shape[2] // 2
@@ -2155,11 +2166,18 @@ class SegmentationApp(ctk.CTk):
             self.canvas_frames["volume"].slider.configure(to=volume.shape[2]-1)
             self.canvas_frames["volume"].slider.set(initial_slice)
             self.zlabel_var.set(f"z: {initial_slice}")
+            self.volume_mask = np.zeros(volume.shape, dtype=np.uint8)
+            slice_mask = self.volume_mask[..., initial_slice]
         
         # normalize, cut intensity peaks
         # do this also when volume is already uint8
         arr = volume.astype(np.float32)
         v_min, v_max = np.percentile(arr, (1, 99))
+        # small check if there are not enough different values (e.g. volumes already representing masks)
+        # to avoid division by zero
+        # done with np.isclose just for additional safety (v_min==v_max should be sufficient)
+        if np.isclose(v_min, v_max):
+            v_min, v_max = 0, 1 # do not change array
         self.volume_disp = (255 * np.clip((arr - v_min) / (v_max - v_min), 0, 1)).astype(np.uint8)
         
         if self.is_volume_loaded:
@@ -2169,7 +2187,7 @@ class SegmentationApp(ctk.CTk):
             self.volume_preview = self.volume_disp[np.ix_(new_x, new_y)]
 
         img = Image.fromarray(self.volume_disp[..., initial_slice]).convert("RGB")
-        self.load_image(img, change_canvas=canvas_frame)
+        self.load_image(img, mask=slice_mask, change_canvas=canvas_frame)
         
         self.update_title()
 
