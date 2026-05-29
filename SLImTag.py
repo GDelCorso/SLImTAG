@@ -17,6 +17,7 @@ Giulio Del Corso, Oscar Papini, Federico Volpini
 import os
 import time
 import shutil
+import io
 
 # Numerical arrays manipulation
 import numpy as np
@@ -34,6 +35,7 @@ from PIL import Image, ImageDraw, ImageTk
 from PIL import PngImagePlugin
 
 import json
+import tarfile # volume masks
 
 # Configuration file management
 import tomlkit
@@ -1950,12 +1952,19 @@ class SegmentationApp(ctk.CTk):
         Upload an existing mask
         - Indexed PNG (mode "P"): direct recovery of mask indices.
         - RGB PNG: legacy color-based reconstruction.
+        - (for volumes): TAR containing indexed PNG files, as produced by save_mask
         """
         if not self.image_is_loaded():
             return
         
         self.deactivate_tools()
-        p = filedialog.askopenfilename(filetypes=[("PNG (indexed or RGB)", "*.png")])
+        if self.is_volume_loaded:
+            def_ext = ".tar"
+            ftypes = [("TAR archive of indexed PNGs", ".tar")]
+        else:
+            def_ext = ".png"
+            ftypes = [("PNG (indexed or RGB)", "*.png")]
+        p = filedialog.askopenfilename(filetypes=ftypes)
         if not p:
             return
 
@@ -1963,7 +1972,7 @@ class SegmentationApp(ctk.CTk):
         
         self.push_undo()
         ext = os.path.splitext(p)[1].lower()
-        if ext != ".png":
+        if ext != def_ext:
             return
         
         self.quicksave_path = p
@@ -1971,69 +1980,96 @@ class SegmentationApp(ctk.CTk):
         # RESET ALL MASKS
         self.clear_all_masks()
         
-        img = Image.open(p)
         
-        # CASE 1: Indexed PNG
-        if img.mode == "P":
-            arr = np.array(img, dtype=np.uint8)
-            self.mask_orig = arr.copy()
-            labels = np.unique(arr)
-            labels = labels[labels != 0][:self.slimtag_config["mask"]["max_masks"]]
-            palette = img.getpalette()
-            try:
-                names = json.loads(img.text["labels"])
-            except KeyError:
-                names = {str(l): f"mask_{l}" for l in labels.tolist()}
-                
-            for l in labels.tolist():
-                self.mask_labels[l] = names[str(l)]#f"mask_{l}"
-                idx = l * 3
-                self.mask_colors[l] = tuple(palette[idx:idx+3])
-                self.mask_widgets[l] = self.create_mask_widget(l)
-                self.mask_widgets[l].pack(fill="x", expand=True)
-            
-            if len(labels) > 0:
-                self.change_mask(target_id=labels[0])
-        
-        # CASE 2: Generic RGB PNG
-        else:
-            img = img.convert("RGB")
-            arr = np.array(img)
-            h, w, _ = arr.shape
-            
-            arr_flat = arr.reshape(-1, 3)
-            arr_flat_nonblack = arr_flat[~np.all(arr_flat == 0, axis=1)]
-            
-            if len(arr_flat_nonblack) == 0:
-                self.mask_orig = np.zeros((h, w), np.uint8)
-                return
-            
-            unique_colors = []
-            seen = set()
-            for color in arr_flat_nonblack:
-                t = tuple(color)
-                if t not in seen:
-                    seen.add(t)
-                    unique_colors.append(t)
-                    if len(unique_colors) >= self.slimtag_config["mask"]["max_masks"]:
-                        break
+        if self.is_volume_loaded:
+            with tarfile.open(p, mode="r") as tf:
+                # recover metadata
+                metajson = json.load(tf.extractfile(tf.getmember("meta.json")))
+                labels = sorted([k for k in metajson["labels"].keys() if int(k) <= self.slimtag_config["mask"]["max_masks"]], key=int)
+                for l in labels:
+                    self.mask_labels[int(l)] = metajson["labels"][l]["name"]
+                    self.mask_colors[int(l)] = hex_to_rgb(metajson["labels"][l]["color"])
+                    self.mask_widgets[int(l)] = self.create_mask_widget(int(l))
+                    self.mask_widgets[int(l)].pack(fill="x", expand=True)
+                if len(labels) > 0:
+                    self.change_mask(target_id=int(labels[0]))
+                self.volume_mask = np.zeros(tuple(metajson["shape"]), dtype=np.uint8)
+                for member in tf:
+                    if member.isfile() and member.name.endswith(".png"):
+                        f = tf.extractfile(member)
+                        if f is None:
+                            continue
+                        img = Image.open(io.BytesIO(f.read()))
+                        idx = int(member.name.split(".")[0])
+                        self.volume_mask[..., idx] = np.array(img, dtype=np.uint8)
+            z = round(self.volume_zslider.get())
+            self.mask_orig = self.volume_mask[..., z]
 
-            try:
-                names = json.loads(img.text["labels"])
-            except KeyError:
-                names = {str(l+1): f"mask_{l+1}" for l in range(len(unique_colors))}
+        else:
             
-            mask = np.zeros((h, w), np.uint8)
-            for i, color in enumerate(unique_colors, 1):
-                mask[np.all(arr == color, axis=-1)] = i
-                self.mask_labels[i] = names[str(i)]#f"mask_{i}"
-                self.mask_colors[i] = color
-                self.mask_widgets[i] = self.create_mask_widget(i)
-                self.mask_widgets[i].pack(fill="x", expand=True)
+            img = Image.open(p)
             
-            self.mask_orig = mask
-            if unique_colors:
-                self.change_mask(target_id=1)
+            # CASE 1: Indexed PNG
+            if img.mode == "P":
+                arr = np.array(img, dtype=np.uint8)
+                self.mask_orig = arr.copy()
+                labels = np.unique(arr)
+                labels = labels[labels != 0][:self.slimtag_config["mask"]["max_masks"]]
+                palette = img.getpalette()
+                try:
+                    names = json.loads(img.text["labels"])
+                except KeyError:
+                    names = {str(l): f"mask_{l}" for l in labels.tolist()}
+                    
+                for l in labels.tolist():
+                    self.mask_labels[l] = names[str(l)]#f"mask_{l}"
+                    idx = l * 3
+                    self.mask_colors[l] = tuple(palette[idx:idx+3])
+                    self.mask_widgets[l] = self.create_mask_widget(l)
+                    self.mask_widgets[l].pack(fill="x", expand=True)
+                
+                if len(labels) > 0:
+                    self.change_mask(target_id=labels[0])
+            
+            # CASE 2: Generic RGB PNG
+            else:
+                img = img.convert("RGB")
+                arr = np.array(img)
+                h, w, _ = arr.shape
+                
+                arr_flat = arr.reshape(-1, 3)
+                arr_flat_nonblack = arr_flat[~np.all(arr_flat == 0, axis=1)]
+                
+                if len(arr_flat_nonblack) == 0:
+                    self.mask_orig = np.zeros((h, w), np.uint8)
+                    return
+                
+                unique_colors = []
+                seen = set()
+                for color in arr_flat_nonblack:
+                    t = tuple(color)
+                    if t not in seen:
+                        seen.add(t)
+                        unique_colors.append(t)
+                        if len(unique_colors) >= self.slimtag_config["mask"]["max_masks"]:
+                            break
+    
+                try:
+                    names = json.loads(img.text["labels"])
+                except KeyError:
+                    names = {str(l+1): f"mask_{l+1}" for l in range(len(unique_colors))}
+                
+                mask = np.zeros((h, w), np.uint8)
+                for i, color in enumerate(unique_colors, 1):
+                    mask[np.all(arr == color, axis=-1)] = i
+                    self.mask_labels[i] = names[str(i)]#f"mask_{i}"
+                    self.mask_colors[i] = color
+                    self.mask_widgets[i] = self.create_mask_widget(i)
+                    self.mask_widgets[i].pack(fill="x", expand=True)
+                
+                self.mask_orig = mask
+                if unique_colors:
+                    self.change_mask(target_id=1)
         
         # prepare empty mask with same size for SAM preview
         self.sam_preview = np.full(self.mask_orig.shape, False)
@@ -2058,11 +2094,17 @@ class SegmentationApp(ctk.CTk):
     
         if not switch_fast:
             # Save as()
-            p = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG (indexed)", "*.png")])
+            if self.is_volume_loaded:
+                def_ext = ".tar"
+                ftypes = [("TAR archive of indexed PNGs", ".tar")]
+            else:
+                def_ext = ".png"
+                ftypes = [("PNG (indexed)", "*.png")]
+            p = filedialog.asksaveasfilename(defaultextension=def_ext, filetypes=ftypes)
             if not p:
                 return
         else: # Save()
-            # If working with a folder
+            # If working with a folder # TODO adapt to volume folder
             if self.list_images != None:
                 p = os.path.join(self.path_aux_save, os.path.splitext(os.path.basename(self.list_images[self.list_index]))[0]+".png")
             # Otherwise
@@ -2070,24 +2112,45 @@ class SegmentationApp(ctk.CTk):
                 p = self.quicksave_path
         
         self.set_status("loading", "Saving mask...")
-    
-        # SCALE
-        mask_to_save = Image.fromarray(self.mask_orig, mode="P")
-        mask_to_save = mask_to_save.resize((self.orig_w, self.orig_h), Image.NEAREST)
-    
         
-        palette = [0, 0, 0] * 256  # index 0 = background nero
+        # palette (common to all PNGs)
+        palette = [0, 0, 0] * 256  # index 0 = black background
         for mid, color in self.mask_colors.items():
             palette[mid*3:mid*3+3] = list(color)
-    
-        mask_to_save.putpalette(palette)
-        
-        # save mask names in png metadata
+
+        # save mask names in png metadata (common to all PNGs))
         metadata = PngImagePlugin.PngInfo()
         labels = {i: self.mask_labels[i] for i in self.mask_labels.keys()}
         metadata.add_text("labels", json.dumps(labels))
         
-        mask_to_save.save(p, pnginfo=metadata)
+        if self.is_volume_loaded:
+            n_slices = self.volume_mask.shape[2]
+            nd = len(str(n_slices)) # max number of digits, for zero padding in namefiles
+            with tarfile.open(p, mode="w") as tf:
+                metajson = {"shape": list(self.volume_mask.shape),
+                            "labels": {i: {"name": self.mask_labels[i],
+                                           "color": rgb_to_hex(self.mask_colors[i])
+                                           } for i in self.mask_labels.keys()}
+                            }
+                metafile = io.BytesIO(json.dumps(metajson, indent=2).encode("utf-8"))
+                tinfo = tarfile.TarInfo(name="meta.json")
+                tinfo.size = len(metafile.getbuffer())
+                tf.addfile(tarinfo=tinfo, fileobj=metafile)
+                for z in range(n_slices):
+                    if self.volume_mask[..., z].any():
+                        mem_buffer = io.BytesIO()
+                        png_file = Image.fromarray(self.volume_mask[..., z], mode="P")
+                        png_file.putpalette(palette)
+                        png_file.save(mem_buffer, format="PNG", pnginfo=metadata)
+                        mem_buffer.seek(0) # rewind buffer
+                        tinfo = tarfile.TarInfo(name=f"{z:0{nd}d}.png")
+                        tinfo.size = len(mem_buffer.getbuffer())
+                        tf.addfile(tarinfo=tinfo, fileobj=mem_buffer)
+        else:
+            mask_to_save = Image.fromarray(self.mask_orig, mode="P")
+            #mask_to_save = mask_to_save.resize((self.orig_w, self.orig_h), Image.NEAREST) # resize to original (probably not necessary?)
+            mask_to_save.putpalette(palette)
+            mask_to_save.save(p, pnginfo=metadata)
         
         self.set_modified(False)
         self.set_status("ready", "Ready")
@@ -2121,15 +2184,12 @@ class SegmentationApp(ctk.CTk):
             self.list_images = None
             self.list_index = 0
             
-            p = filedialog.askopenfilename(filetypes=[("Image files", ("*.dcm", "*.nrrd", "*.nii"))])
+            p = filedialog.askopenfilename(filetypes=[("Biomedical data files", ("*.dcm", "*.nrrd", "*.nii"))])
             if not p:
                 return
             
         else:
             p = path
-        
-        self.path_original_image = p
-        self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
     
         self.set_status("loading", "Loading volume...")
 
@@ -2188,6 +2248,10 @@ class SegmentationApp(ctk.CTk):
 
         img = Image.fromarray(self.volume_disp[..., initial_slice]).convert("RGB")
         self.load_image(img, mask=slice_mask, change_canvas=canvas_frame)
+        
+        
+        self.path_original_image = p
+        self.quicksave_path = os.path.splitext(p)[0] + "_mask." + ("tar" if self.is_volume_loaded else "png")
         
         self.update_title()
 
