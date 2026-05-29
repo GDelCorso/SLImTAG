@@ -23,6 +23,7 @@ import io
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion, binary_fill_holes
 from scipy.special import expit # sigmoid
+from scipy import ndimage # Region growing
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
@@ -833,6 +834,31 @@ class SegmentationApp(ctk.CTk):
             
             # SAM model inference on image
             image = adjust_image(np.array(self.image_orig), self.wand_brightness, self.wand_contrast, self.wand_gamma)
+            
+            ## PRE-COMPUTATION for region grown
+            # Grayscale image for region growing
+            self.region_growing_gray = np.array(
+                self.image_orig.convert("L"),
+                dtype=np.float32
+            )
+            
+            # RGB
+            self.region_growing_rgb = np.array(
+                self.image_orig.convert("RGB"),
+                dtype=np.float32
+            )
+            
+            # Edge detection for region growing
+            gx = ndimage.sobel(self.region_growing_gray, axis=1)
+            gy = ndimage.sobel(self.region_growing_gray, axis=0)
+            self.region_growing_grad = np.hypot(gx, gy)
+
+            # normalize for stability and make in in  [0,1]
+            #self.region_growing_grad = self.region_growing_grad / (self.region_growing_grad.max() + 1e-8)
+            p = np.percentile(self.region_growing_grad, 99)
+            self.region_growing_grad = np.clip(self.region_growing_grad / (p + 1e-8), 0, 1)
+            
+            # SAM computation
             self.sam.set_image(image)
             
             # Turn on switch
@@ -1778,6 +1804,8 @@ class SegmentationApp(ctk.CTk):
             self.mask_locked = np.full(self.mask_orig.shape, False)
             self.update_lock()
         self.sam_preview = np.full(self.mask_orig.shape, False)
+        
+
 
         # Async load of the SAM model to avoid freezed interface
         if self.thread is None or not self.thread.is_alive():
@@ -2317,7 +2345,8 @@ class SegmentationApp(ctk.CTk):
             return
         
         if self.tool_active["wand"] and check_inside_image:
-            self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
+            self.region_growing(e) 
+            #self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             return
         
         if self.tool_active["wand_multi"] and check_inside_image:
@@ -2809,7 +2838,157 @@ class SegmentationApp(ctk.CTk):
             if self.thread is None or not self.thread.is_alive():
                 self.thread = threading.Thread(target=self.async_loader, daemon=True)
                 self.thread.start()
+             
+    # NON-NEURAL METHODS   
+    # SCI-PY REGION GROWING             
+    def region_growing(self, e, tolerance=0.15, switch_robust_estimator=True, 
+                       switch_RGB=True, use_edges=True, max_grad_edge=0.5, 
+                       switch_erosion=False, switch_fill_hole=True, 
+                       max_hole_size=100):
+        """
+        Interactive region growing segmentation with optional RGB/grayscale similarity,
+        robust seed estimation, edge-aware filtering, morphological cleanup, and
+        selective hole filling.
+        
+        Parameters
+        ----------
+        e : event
+            Mouse click event (canvas coordinates).
+        
+        tolerance : float (0–1)
+            Similarity threshold for region growing (0 = strict, 1 = permissive).
+        
+        switch_robust_estimator : bool
+            Uses 3×3 trimmed mean seed estimation to reduce noise sensitivity.
+        
+        switch_RGB : bool
+            If True uses RGB Euclidean distance, otherwise grayscale intensity.
+        
+        use_edges : bool
+            Adds gradient-based edge stopping constraint.
+        
+        max_grad_edge : float (0–1)
+            Maximum normalized gradient allowed for region growth (lower = stricter).
+        
+        switch_erosion : bool
+            Applies morphological opening to break thin connections before labeling.
+        
+        switch_fill_hole : bool
+            Enables selective filling of small internal holes.
+        
+        max_hole_size : int
+            Maximum pixel area of holes to fill.
+        """
+        
+        
+        if self.image_orig is None or self.active_mask_id is None:
+            return
+    
+        # Map coordinates
+        x = int((e.x) * (self.view_w / self.canvas.winfo_width())) + self.view_x
+        y = int((e.y) * (self.view_h / self.canvas.winfo_height())) + self.view_y
+    
+        # Select the seed value
+        if switch_robust_estimator:
+            # Trimmed robust local estimator
+            # GRAYSCALE
+            patch_gray = self.region_growing_gray[
+                max(0, y-1):min(self.region_growing_gray.shape[0], y+2),
+                max(0, x-1):min(self.region_growing_gray.shape[1], x+2)
+            ].astype(np.float32)
+            vals_gray = patch_gray.flatten()
+            med_gray = np.median(vals_gray)
+            dist_gray = np.abs(vals_gray - med_gray)
+            keep_idx = np.argsort(dist_gray)[:5]
+            seed_val_gray = vals_gray[keep_idx].mean()
+        
+            # RGB ROBUST SEED
+            patch_rgb = self.region_growing_rgb[
+                max(0, y-1):min(self.region_growing_rgb.shape[0], y+2),
+                max(0, x-1):min(self.region_growing_rgb.shape[1], x+2)]
+            
+            vals_rgb = patch_rgb.reshape(-1, 3)
+            med_rgb = np.median(vals_rgb, axis=0)
+            dist_rgb = np.sum((vals_rgb - med_rgb)**2, axis=1)
+            keep_idx_rgb = np.argsort(dist_rgb)[:5]
+            seed_val_rgb = vals_rgb[keep_idx_rgb].mean(axis=0)
+        else:
+            # Pixel perfect estimator
+            seed_val_gray = self.region_growing_gray[y, x]
+            seed_val_rgb = self.region_growing_rgb[y, x]
+        
+    
+        # Similarity score
+        if switch_RGB:
+            # RGB
+            rgb = self.region_growing_rgb
+            dr = rgb[..., 0] - seed_val_rgb[0]
+            dg = rgb[..., 1] - seed_val_rgb[1]
+            db = rgb[..., 2] - seed_val_rgb[2]
+            diff = np.sqrt(dr*dr + dg*dg + db*db)
+        else:
+            # GRAY Scale
+            diff = np.abs(self.region_growing_gray - seed_val_gray) # in FLOAT 32
+        
+    
+        # Edges computation (evaluated on grayscale)
+        if use_edges:
+            # Integrates edges by removing all area with grad greater thatn max_grad_edge
+            mask = (diff < round(tolerance*255)) & (self.region_growing_grad < max_grad_edge) 
+    
+        else:
+            # classic region growing
+            mask = diff < round(tolerance*255) 
+    
 
+        # Erode to avoid small connections between zones
+        if switch_erosion:
+            mask_clean = ndimage.binary_opening(mask, structure=np.ones((3,3)))
+            
+            # Extraction of single connected component
+            labeled, _ = ndimage.label(mask_clean)
+            seed_label = labeled[y, x]
+            if seed_label == 0:
+                return
+        else:
+            # Extraction of single connected component
+            labeled, _ = ndimage.label(mask)
+            seed_label = labeled[y, x]
+            if seed_label == 0:
+                return
+    
+        region = (labeled == seed_label)
+    
+        # Fill small holes
+        if switch_fill_hole:
+            # holes = internal background of the region
+            holes = ndimage.binary_fill_holes(region) & (~region)
+            
+            # label holes
+            hole_labels, num_holes = ndimage.label(holes)
+            
+            # compute hole sizes
+            hole_sizes = np.bincount(hole_labels.ravel())
+            
+            # skip label 0 (background)
+            small_holes = np.isin(
+                hole_labels,
+                np.where(hole_sizes <= max_hole_size)[0]
+            )
+            
+            # fill only small holes
+            region = region | small_holes
+    
+
+        # Undo system
+        self.push_undo()
+    
+        # Apply to mask and update display
+        self.mask_orig[region & (~self.mask_locked)] = self.active_mask_id
+        self.set_modified(True)
+        self.update_display(update_image=False)
+        
+        
     # CONNECTED COMPONENT
     def get_connected_component(self, mask, start_y, start_x, target_id):
         '''
