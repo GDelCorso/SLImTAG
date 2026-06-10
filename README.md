@@ -45,14 +45,18 @@ Particular focus on:
 Please note that the version numbers listed here refer to the environment in which SLImTAG has been tested ― it is possible that lower version will work too.
 
 - Python 3.12
-- PyTorch (for SAM): torch == 2.5.1 (CUDA 12.1 recommended if available) and torchvision == 0.20.1
-- segment-anything == 1.0 (actual SAM library)
 - numpy == 2.3.1 (mask manipulation)
 - scipy == 1.17.0 (erosion/dilation tool)
 - pillow == 12.0.0 (images management)
 - customtkinter == 5.2.2 (GUI)
 - screeninfo == 0.8.1 (recover screen info for UI management)
 - tomlkit == 0.14.0 (configuration file management)
+
+For Segment Anything Model:
+
+- torch == 2.5.1 (CUDA 12.1 recommended if available)
+- torchvision == 0.20.1
+- segment-anything == 1.0 (actual SAM library)
 
 For biomedical loading/features:
 
@@ -95,13 +99,24 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 4. Install dependencies:
 
     ```bash
-    python3 -m pip install -r requirements.txt
+    python3 -m pip install -r requirements-ALL.txt
     ```
 
-5. Download SAM's weights: download the file `sam_vit_b_01ec64.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place it in the `models` folder. If you have wget, you can do it via terminal:
+    will install also the packages related to biomedical features and SAM. Alternatively, the core dependencies can be installed through
+
+    ```bash
+    python3 -m pip install -r requirements-core.txt
+    ```
+
+    and then the optional dependencies using `requirements-biomedical.txt` for biomedical features or `requirements-sam.txt` for SAM. <i>Please make sure that the key related to an optional feature in `config.toml`, under `[modules]`, is set to `false` if the corrisponding libraries are not installed.</i>
+
+5. (Optional) Download SAM's weights: download one or more files `sam_vit_b_01ec64.pth`, `sam_vit_h_4b8939.pth`, `sam_vit_l_0b3195.pth` from [https://github.com/facebookresearch/segment-anything](https://github.com/facebookresearch/segment-anything) (in the "Model Checkpoints" section) and place them in the `models` folder. If you have wget, you can do it via terminal:
 
     ```bash
     wget -O models/sam_vit_b_01ec64.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+    wget -O models/sam_vit_h_4b8939.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
+    wget -O models/sam_vit_l_0b3195.pth https://dl.fbaipublicfiles.com/segment_anything/sam_vit_l_0b3195.pth
+
     ```
 
 6. That's it! To run the program just do

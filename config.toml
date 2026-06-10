@@ -4,7 +4,7 @@ undo_depth = 10 # max number of undo steps
 
 [modules]
 sam = true
-biomedical = false
+biomedical = true
 
 [view]
 zoom.max_pixel = 32 # number of pixels of original image visible at max zoom level

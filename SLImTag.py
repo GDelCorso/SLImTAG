@@ -21,7 +21,7 @@ import io
 
 # Numerical arrays manipulation
 import numpy as np
-from scipy import ndimage # for region goperations (growing, dilation, erosion, fill holes)
+from scipy import ndimage # for region operations (growing, dilation, erosion, fill holes)
 from scipy.special import expit # sigmoid
 
 # TkInter and CustomTkInter GUI
@@ -47,22 +47,8 @@ from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 
-# Custom biomedical utils
-from slimtag_biomedical import load_medical_volume
-
-# Torch and SAM (Segment anything model)
-import torch
-from segment_anything import sam_model_registry, SamPredictor
-
 # Asynchronous threading import
 import threading
-
-# Suppress specific PyTorch warnings
-import warnings
-warnings.filterwarnings(
-    "ignore",
-    message="You are using `torch.load` with `weights_only=False`"
-)
 
 #%% Global parameters
 
@@ -120,6 +106,21 @@ class SegmentationApp(ctk.CTk):
         # TODO move set_appearance_mode to preferences window
         # optionsmenu "dark", "light" with default value: "dark"
         
+        #%% Optional imports
+        
+        if self.slimtag_config["modules"]["biomedical"]: # Custom biomedical utils
+            from slimtag_biomedical import load_medical_volume
+        
+        if self.slimtag_config["modules"]["sam"]: # SAM segmentation models
+            # Torch and SAM (Segment anything model)
+            import torch
+            from segment_anything import sam_model_registry, SamPredictor
+            # Suppress specific PyTorch warnings
+            import warnings
+            warnings.filterwarnings(
+                "ignore",
+                message="You are using `torch.load` with `weights_only=False`"
+            )
         #%% Attributes
         
         # Full image and mask
@@ -338,8 +339,6 @@ class SegmentationApp(ctk.CTk):
         # Menu Image (top menu)
         image_menu = tk.Menu(self.menu_bar, tearoff=0)
         image_menu.add_command(label="Import image", command=self.open_image, accelerator="Ctrl+I")
-        # TODO: maybe move biomedical stuff to its own submenu? so it is easier to manage in modular padadigm (just disable entire biomedical submenu instead of single entries in several menus)
-        image_menu.add_command(label="Import NRRD/NIFTI/DICOM", command=self.biomedical_load)
         image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F", state="disabled")
         # TODO reactivate import folder
         self.topmenu_items["image"] = image_menu
@@ -372,6 +371,13 @@ class SegmentationApp(ctk.CTk):
         self.topmenu_items["help"] = help_menu
         self.menu_bar.add_cascade(label="Help", menu=help_menu)
         
+        # (Optional) Biomedical menu (top menu)
+        if self.slimtag_config["modules"]["biomedical"]:
+            biomedical_menu = tk.Menu(self.menu_bar, tearoff=0)
+            biomedical_menu.add_command(label="Import NRRD/NIFTI/DICOM", command=self.biomedical_load)
+            self.topmenu_items["biomedical"] = biomedical_menu
+            self.menu_bar.add_cascade(label="Biomedical tools", menu=biomedical_menu, foreground=HIGHLIGHT_COLOR)
+            
         #%% Main UI elements
         panels_width = 250
         # Left panel for tools
@@ -411,7 +417,7 @@ class SegmentationApp(ctk.CTk):
         
         # Buttons
         # TODO all commands, in particular add the "right-click" that are a different tool now
-        # I ould keep the right-click behaviour in any case (for "pro users")
+        # I think we should keep the right-click behaviour in any case (for "pro users")
         self.create_tool_button("brush", 0, 0, 0, help_text="Brush [B]")
         self.create_tool_button("eraser", 0, 0, 1, help_text="Eraser")
         self.create_tool_button("polygon", 0, 1, 0)
@@ -705,16 +711,14 @@ class SegmentationApp(ctk.CTk):
         self.zoom_label.grid(row=0, column=6, sticky="e", padx=10)
 
         splash.step(10)
-        
-        
+
         #%% SAM
         device = "cuda" if torch.cuda.is_available() else "cpu"
         sam = sam_model_registry[MODEL_TYPE](checkpoint=MODEL_WEIGHTS_PATH)
         sam.to(device).eval()
         self.sam = SamPredictor(sam)
 
-        splash.step(20) 
-        
+        splash.step(20)
         
         # Define the asynchronous mechanism to speed up image loading
         self.switch_computed_magic_wand = False     # True if SAM is loaded
