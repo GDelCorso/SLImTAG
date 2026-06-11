@@ -68,22 +68,8 @@ STATUS_COLOR = {
 SAM_MODELS = {
     "SAM (ViT-B)": {"type": "vit_b", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_b_01ec64.pth")},
     "SAM (ViT-L)": {"type": "vit_l", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_l_0b3195.pth")},
-    "SAM (ViT-H)": {"type": "vit_h", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_h_4b8939.pth")},
+    "SAM (ViT-H)": {"type": "vit_h", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_h_4b8939.pth")}
     }
-
-#%% SAM parameters
-# TODO rework magic wand
-# Choose the model type
-# MODEL_TYPE = "vit_b"    # Lightweight
-
-# if MODEL_TYPE == "vit_b":       # Lightweight
-#     MODEL_WEIGHTS_PATH = "models/sam_vit_b_01ec64.pth"
-# elif MODEL_TYPE == "vit_l":     # Standard
-#     MODEL_WEIGHTS_PATH = "models/sam_vit_l_0b3195.pth"
-# elif MODEL_TYPE == "vit_h":     # Advanced
-#     MODEL_WEIGHTS_PATH = "models/sam_vit_h_4b8939.pth"
-# else:
-#     raise Exception("Warning: select a correct model type.")
 
 #%% CTK parameters
 
@@ -309,7 +295,9 @@ class SegmentationApp(ctk.CTk):
         
         # Magic wand threshold (e.g. SAM model threshold), range 0.0 .. 1.0
         self.wand_threshold = 0.15 # region growing has 0.15 as default value (SAM instead has 0.5)
-
+        # Region growing edge tolerance
+        self.wand_edge_tolerance = 0.5
+        
         # boolean to track if mouse buttons are pressed
         self.b3_pressed = False
         self.mid_pressed = False
@@ -661,8 +649,16 @@ class SegmentationApp(ctk.CTk):
         self.wand_threshold_lbl.grid(row=3, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
         self.wand_threshold_slider = ctk.CTkSlider(self.tool_opt_frame["wand"], from_=0.0, to=1.0,
                                                    command=lambda v: (setattr(self,"wand_threshold",float(v)), self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")))
-        self.wand_threshold_slider.set(self.wand_threshold) # TODO
-        self.wand_threshold_slider.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+        self.wand_threshold_slider.set(self.wand_threshold)
+        self.wand_threshold_slider.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
+        
+        ctk.CTkLabel(self.tool_opt_frame["wand"], text="Edge tolerance", fg_color="transparent", anchor="w").grid(row=5, column=0, sticky="ew", padx=(10, 5), pady=(10, 2))
+        self.wand_edge_tolerance_lbl = ctk.CTkLabel(self.tool_opt_frame["wand"], text=f"{self.wand_edge_tolerance:.2f}", fg_color="transparent", anchor="e")
+        self.wand_edge_tolerance_lbl.grid(row=5, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
+        self.wand_edge_tolerance_slider = ctk.CTkSlider(self.tool_opt_frame["wand"], from_=0.0, to=1.0,
+                                                   command=lambda v: (setattr(self,"wand_edge_tolerance",float(v)), self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")))
+        self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+        self.wand_edge_tolerance_slider.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
         
         # Smoothing options
         ctk.CTkLabel(self.tool_opt_frame["smooth"], text="Smoothing settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
@@ -921,11 +917,18 @@ class SegmentationApp(ctk.CTk):
         """
         if model_type == "Region growing":
             self.wand_threshold = 0.15
-        elif model_type in self.available_sam_models and model_type != self.last_sam_model:
+            self.wand_edge_tolerance_slider.configure(state="normal",
+                                                      button_color=ctk.ThemeManager.theme["CTkSlider"]["button_color"]
+                                                      )
+        elif model_type in self.available_sam_models:
             self.wand_threshold = 0.5
-            self.last_sam_model = model_type
-            self.sam_loader(model_type)
-            self.async_loader()
+            self.wand_edge_tolerance_slider.configure(state="disabled",
+                                                      button_color=["gray60", "gray45"]
+                                                      )
+            if model_type != self.last_sam_model:
+                self.last_sam_model = model_type
+                self.sam_loader(model_type)
+                self.async_loader()
         self.wand_threshold_slider.set(self.wand_threshold)
         self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
     
@@ -2396,7 +2399,7 @@ class SegmentationApp(ctk.CTk):
         
         if self.tool_active["wand"] and check_inside_image:
             if self.wand_model_menu.get() == "Region growing":
-                self.region_growing(e, tolerance = self.wand_threshold)
+                self.region_growing(e, tolerance = self.wand_threshold, max_grad_edge=self.wand_edge_tolerance)
             elif self.wand_model_menu.get() in self.available_sam_models:
                 self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             else:
