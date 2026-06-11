@@ -18,6 +18,7 @@ import os
 import time
 import shutil
 import io
+import warnings
 
 # Numerical arrays manipulation
 import numpy as np
@@ -53,6 +54,7 @@ import threading
 #%% Global parameters
 
 CONFIG_FILE_PATH = "config.toml"
+MODELS_BASE_PATH = "models"
 
 STATUS_SYMBOL = "●"
 STATUS_COLOR = {
@@ -62,19 +64,26 @@ STATUS_COLOR = {
     "idle":   ("#95A5A6", "#95A5A6"),  # gray
     }
 
+# dictionary of SAM models
+SAM_MODELS = {
+    "SAM (ViT-B)": {"type": "vit_b", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_b_01ec64.pth")},
+    "SAM (ViT-L)": {"type": "vit_l", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_l_0b3195.pth")},
+    "SAM (ViT-H)": {"type": "vit_h", "path": os.path.join(MODELS_BASE_PATH, "sam_vit_h_4b8939.pth")},
+    }
+
 #%% SAM parameters
 # TODO rework magic wand
 # Choose the model type
-MODEL_TYPE = "vit_b"    # Lightweight
+# MODEL_TYPE = "vit_b"    # Lightweight
 
-if MODEL_TYPE == "vit_b":       # Lightweight
-    MODEL_WEIGHTS_PATH = "models/sam_vit_b_01ec64.pth"
-elif MODEL_TYPE == "vit_l":     # Standard
-    MODEL_WEIGHTS_PATH = "models/sam_vit_l_0b3195.pth"
-elif MODEL_TYPE == "vit_h":     # Advanced
-    MODEL_WEIGHTS_PATH = "models/sam_vit_h_4b8939.pth"
-else:
-    raise Exception("Warning: select a correct model type.")
+# if MODEL_TYPE == "vit_b":       # Lightweight
+#     MODEL_WEIGHTS_PATH = "models/sam_vit_b_01ec64.pth"
+# elif MODEL_TYPE == "vit_l":     # Standard
+#     MODEL_WEIGHTS_PATH = "models/sam_vit_l_0b3195.pth"
+# elif MODEL_TYPE == "vit_h":     # Advanced
+#     MODEL_WEIGHTS_PATH = "models/sam_vit_h_4b8939.pth"
+# else:
+#     raise Exception("Warning: select a correct model type.")
 
 #%% CTK parameters
 
@@ -108,19 +117,34 @@ class SegmentationApp(ctk.CTk):
         
         #%% Optional imports
         
+        self._load_medical_volume = None
+        self._torch = None
+        self._segment_anything = None
+        
         if self.slimtag_config["modules"]["biomedical"]: # Custom biomedical utils
-            from slimtag_biomedical import load_medical_volume
+            try:
+                from slimtag_biomedical import load_medical_volume
+                self._load_medical_volume = load_medical_volume
+            except ModuleNotFoundError:
+                warnings.warn("libraries for 'biomedical' not found, 'biomedical = True' will be ignored")
+                self.slimtag_config["modules"]["biomedical"] = False
         
         if self.slimtag_config["modules"]["sam"]: # SAM segmentation models
             # Torch and SAM (Segment anything model)
-            import torch
-            from segment_anything import sam_model_registry, SamPredictor
-            # Suppress specific PyTorch warnings
-            import warnings
-            warnings.filterwarnings(
-                "ignore",
-                message="You are using `torch.load` with `weights_only=False`"
-            )
+            try:
+                import torch
+                self._torch = torch
+                import segment_anything
+                self._segment_anything = segment_anything
+                # Suppress specific PyTorch warnings
+                warnings.filterwarnings(
+                    "ignore",
+                    message="You are using `torch.load` with `weights_only=False`"
+                )
+            except ModuleNotFoundError:
+                warnings.warn("libraries for 'sam' not found, 'sam = True' will be ignored")
+                self.slimtag_config["modules"]["sam"] = False
+
         #%% Attributes
         
         # Full image and mask
@@ -262,6 +286,15 @@ class SegmentationApp(ctk.CTk):
         self.view_h = None
 
         # SAM management
+        self.sam = None
+        self.last_sam_model = None # prevent model reload if the same model is chosen
+        self.sam_device = None
+        self.available_sam_models = []
+        if self.slimtag_config["modules"]["sam"]:
+            self.sam_device = "cuda" if torch.cuda.is_available() else "cpu"
+            for sam_model in SAM_MODELS:
+                if os.path.exists(SAM_MODELS[sam_model]["path"]):
+                    self.available_sam_models.append(sam_model)
         self.sam_points = []
         self.sam_pt_labels = []
         self.sam_preview = None # boolean matrix for multipoint SAM preview
@@ -275,12 +308,17 @@ class SegmentationApp(ctk.CTk):
         self.wand_gamma = 0
         
         # Magic wand threshold (e.g. SAM model threshold), range 0.0 .. 1.0
-        self.wand_threshold = 0.5 # SAM has 0.5 as default value
+        self.wand_threshold = 0.15 # region growing has 0.15 as default value (SAM instead has 0.5)
 
         # boolean to track if mouse buttons are pressed
         self.b3_pressed = False
         self.mid_pressed = False
         
+        # asynchronous mechanism to speed up image loading
+        self.switch_computed_magic_wand = False     # True if SAM is loaded
+        self.thread = None                          # Threading variable
+        self.lock = threading.Lock()              # To protect shared varaibles
+
         splash.step(10)
         
         
@@ -588,8 +626,9 @@ class SegmentationApp(ctk.CTk):
         self.brush_rot_slider.configure(state="disabled") # TODO remove when implemented
         
         # Magic wand options
+        wand_models = ["Region growing"] + self.available_sam_models
         ctk.CTkLabel(self.tool_opt_frame["wand"], text="Magic wand settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
-        self.wand_model_menu = ctk.CTkOptionMenu(self.tool_opt_frame["wand"], values=["Region growing", "SAM (ViT-B)"], command=None) # TODO
+        self.wand_model_menu = ctk.CTkOptionMenu(self.tool_opt_frame["wand"], values=wand_models, command=self.wand_model_select)
         self.wand_model_menu.set("Region growing")
         self.wand_model_menu.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
         Tooltip(self.wand_model_menu, text="Magic wand method")
@@ -710,23 +749,8 @@ class SegmentationApp(ctk.CTk):
         self.zoom_label = ctk.CTkLabel(self.statusbar, textvariable=self.zoom_label_var)
         self.zoom_label.grid(row=0, column=6, sticky="e", padx=10)
 
-        splash.step(10)
-
-        #%% SAM
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        sam = sam_model_registry[MODEL_TYPE](checkpoint=MODEL_WEIGHTS_PATH)
-        sam.to(device).eval()
-        self.sam = SamPredictor(sam)
-
-        splash.step(20)
-        
-        # Define the asynchronous mechanism to speed up image loading
-        self.switch_computed_magic_wand = False     # True if SAM is loaded
-        self.thread = None                          # Threading variable
-        self.lock = threading.Lock()              # To protect shared varaibles
-        
-        self.set_controls_state(False) # Deactivate all buttons -- must be done after defining switch_computed_magic_wand
-
+        splash.step(30)
+                
         #%% Bindings
         # Zoom via keyboard (Ctrl + / Ctrl -)
         self.bind("<Control-plus>", lambda e: self.zoom_in())
@@ -747,9 +771,10 @@ class SegmentationApp(ctk.CTk):
         # Bind "resizing window"
         self.bind("<Configure>", self.on_resize)
         
+        if self.slimtag_config["modules"]["sam"]:
         # Fire SAM at Ctrl release
-        self.bind("<KeyRelease-Control_L>", lambda e: self.sam_apply_release())
-        self.bind("<KeyRelease-Control_R>", lambda e: self.sam_apply_release())
+            self.bind("<KeyRelease-Control_L>", lambda e: self.sam_apply_release())
+            self.bind("<KeyRelease-Control_R>", lambda e: self.sam_apply_release())
         
         # Shortcuts
         self.bind("<b>", lambda e: self.toggle_tool("brush"))
@@ -793,6 +818,9 @@ class SegmentationApp(ctk.CTk):
         
         #%% Clean-up at the end of __init__
         
+        # Deactivate all buttons -- must be done after defining switch_computed_magic_wand
+        self.set_controls_state(False)
+
         # set appearance mode
         self.toggle_appearance()
         
@@ -853,7 +881,9 @@ class SegmentationApp(ctk.CTk):
             self.region_growing_grad = np.clip(self.region_growing_grad / (p + 1e-8), 0, 1)
             
             # SAM computation
-            self.sam.set_image(image)
+            if self.slimtag_config["modules"]["sam"]:
+                if self.sam is not None:
+                    self.sam.set_image(image)
             
             # Turn on switch
             self.switch_computed_magic_wand = True
@@ -872,6 +902,32 @@ class SegmentationApp(ctk.CTk):
             
         # Refresh and update display
         self.update_display(update_image=True)
+    
+    def sam_loader(self, model_type):
+        """
+        Load a SAM model.
+        
+        Here model_type is one of the keys of SAM_MODELS.
+        """
+        self.set_status("loading", "Loading SAM model...")
+        sam = self._segment_anything.sam_model_registry[SAM_MODELS[model_type]["type"]](checkpoint=SAM_MODELS[model_type]["path"])
+        sam.to(self.sam_device).eval()
+        self.sam = self._segment_anything.SamPredictor(sam)
+        self.set_status("ready", "Ready")
+    
+    def wand_model_select(self, model_type):
+        """
+        Command for self.wand_model_menu
+        """
+        if model_type == "Region growing":
+            self.wand_threshold = 0.15
+        elif model_type in self.available_sam_models and model_type != self.last_sam_model:
+            self.wand_threshold = 0.5
+            self.last_sam_model = model_type
+            self.sam_loader(model_type)
+            self.async_loader()
+        self.wand_threshold_slider.set(self.wand_threshold)
+        self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
     
     def load_config_file(self, toml_file):
         """
@@ -2218,7 +2274,7 @@ class SegmentationApp(ctk.CTk):
         # reset masks
         self.clear_all_masks()
         
-        metadata, spacing, volume = load_medical_volume(p)
+        metadata, spacing, volume = self._load_medical_volume(p)
         self.biomedical_data["metadata"] = metadata
         self.biomedical_data["spacing"] = spacing
         self.biomedical_data["volume"] = volume
@@ -2341,7 +2397,7 @@ class SegmentationApp(ctk.CTk):
         if self.tool_active["wand"] and check_inside_image:
             if self.wand_model_menu.get() == "Region growing":
                 self.region_growing(e, tolerance = self.wand_threshold)
-            elif self.wand_model_menu.get() in ["SAM (ViT-B)"]: # TODO implement SAM models
+            elif self.wand_model_menu.get() in self.available_sam_models:
                 self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             else:
                 return

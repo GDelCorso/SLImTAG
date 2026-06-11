@@ -7,15 +7,15 @@ However, the current version is a fully functioning interface with a novel graph
 
 
 Particular focus on:
-- [ ] Integrate non-neural methods [Gdc]
-- [ ] Integrate existing *load* nrrd, nifti, etc. modules [Gdc]
+- [x] Integrate non-neural methods [Gdc]
+- [x] Integrate existing *load* nrrd, nifti, etc. modules [Gdc]
 - [ ] Upload (already tested) Bayesian module [Gdc]
 - [ ] Change existing 3D visualization to ease the read on biomedical settings [Op]
 - [x] Tooltip hover [Op]
 - [x] Preview multipoint improvement [Op]
 - [ ] Re-activate exitings tools in the novel graphical interface [All]
 - [ ] Define boundaries visualization [Fv]
-- [ ] Load few example images/nrrds
+- [ ] Load few example images/nrrds [Gdc]
 
 
 # SLImTAG – Simple Light-weight Image TAGging tool
@@ -81,7 +81,7 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 2. Create a virtual environment
 
     ```bash
-    python3 -m venv slimtag-venv
+    python -m venv slimtag-venv
     ```
 
 3. Activate the environment: on Mac/Linux
@@ -99,13 +99,13 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 4. Install dependencies:
 
     ```bash
-    python3 -m pip install -r requirements-ALL.txt
+    python -m pip install -r requirements-ALL.txt
     ```
 
     will install also the packages related to biomedical features and SAM. Alternatively, the core dependencies can be installed through
 
     ```bash
-    python3 -m pip install -r requirements-core.txt
+    python -m pip install -r requirements-core.txt
     ```
 
     and then the optional dependencies using `requirements-biomedical.txt` for biomedical features or `requirements-sam.txt` for SAM. <i>Please make sure that the key related to an optional feature in `config.toml`, under `[modules]`, is set to `false` if the corrisponding libraries are not installed.</i>
@@ -122,7 +122,7 @@ Also tkinter is required, but it cannot be installed via pip. On Windows it shou
 6. That's it! To run the program just do
 
     ```bash
-    python3 SLImTag.py
+    python SLImTag.py
     ```
 
     from the project folder, with the virtual environment activated.
@@ -252,13 +252,13 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 ### Potential additional features
 - [ ] Different brush shapes (square)
 - [ ] Rectangle/polygonal "add to mask" tool
-- [ ] Define plugins for different features to mantain the system lightweight and make it adaptable to user experience
+- [ ] (WIP) Define plugins for different features to mantain the system lightweight and make it adaptable to user experience
 - [ ] Add button "invert mask"
 - [ ] Add "save png with mask as alpha channel"
 - [ ] Add "paint bucket" that changes color of (connected component of) mask with active mask
 
 ### Extension to bio-medical fields
 - [ ] Import MedSAM and modify the MagicWand wrapper
-- [ ] Import also .nrrd and .nifti files for MRI/scan segmentation
-- [ ] Allows to import 3D (i.e., ordered list of 2D elements) views for 3D MRI scans and video segmentation
+- [ ] (WIP) Import also .nrrd and .nifti files for MRI/scan segmentation
+- [ ] (WIP) Allows to import 3D (i.e., ordered list of 2D elements) views for 3D MRI scans and video segmentation
 - [ ] Anonymization tool (integrated in save as nrrd/nifti) *or* in the load button
