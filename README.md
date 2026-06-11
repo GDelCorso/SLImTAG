@@ -51,6 +51,7 @@ Please note that the version numbers listed here refer to the environment in whi
 - customtkinter == 5.2.2 (GUI)
 - screeninfo == 0.8.1 (recover screen info for UI management)
 - tomlkit == 0.14.0 (configuration file management)
+- scikit-optimize == 0.10.2 (Bayesian methods)
 
 For Segment Anything Model:
 

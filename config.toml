@@ -6,6 +6,11 @@ undo_depth = 10 # max number of undo steps
 sam = true
 biomedical = true
 
+[bayesian_optimization]
+initial_points = 10
+max_iterations = 50
+n_points = 20
+
 [view]
 zoom.max_pixel = 32 # number of pixels of original image visible at max zoom level
 zoom.min_pixel = 6144 # number of pixels of original image visible at min zoom level

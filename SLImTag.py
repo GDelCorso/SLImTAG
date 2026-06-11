@@ -47,6 +47,8 @@ from slimtag_utils import MultiButtonDialog, MaskEditDialog
 from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
+from slimtag_bayesian import BayesianOptimization
+from slimtag_bayesian import region_growing_model_inference, region_growing_preprocessing # TODO remove and reimplement from main file
 
 # Asynchronous threading import
 import threading
@@ -634,11 +636,10 @@ class SegmentationApp(ctk.CTk):
         self.wand_gamma_lbl = ctk.CTkLabel(self.wand_adj_frame, text=str(self.wand_gamma), fg_color="transparent", anchor="e")
         self.wand_gamma_lbl.grid(row=3, column=1, sticky="ew", padx=(0,10), pady=(3,0))
 
-        self.wand_auto_update = ctk.CTkButton(self.wand_adj_frame, text="Auto", image=self.icons_dict["AutoUpdate"]["disabled"], command=None)
+        self.wand_auto_update = ctk.CTkButton(self.wand_adj_frame, text="Auto", image=self.icons_dict["AutoUpdate"]["normal"], command=self.wand_update_bayesian)
         self.wand_auto_update.grid(row=4, column=1, sticky="ew", padx=(5, 10), pady=(3,10))
-        self.wand_auto_update.configure(state='disabled') # TODO implement auto update
         Tooltip(self.wand_auto_update, text="Auto compute preprocessing parameters")
-        self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual", image=self.icons_dict["ManualUpdate"]["disabled"], command=self.manual_wand_preprocessing)
+        self.wand_manual_update = ctk.CTkButton(self.wand_adj_frame, text="Manual", image=self.icons_dict["ManualUpdate"]["normal"], command=self.manual_wand_preprocessing)
         self.wand_manual_update.grid(row=4, column=0, sticky="ew", padx=(10, 5), pady=(3,10))
         Tooltip(self.wand_manual_update, text="Select preprocessing parameters")
         
@@ -920,11 +921,16 @@ class SegmentationApp(ctk.CTk):
             self.wand_edge_tolerance_slider.configure(state="normal",
                                                       button_color=ctk.ThemeManager.theme["CTkSlider"]["button_color"]
                                                       )
+            self.wand_auto_update.configure(state="normal",
+                                            image=self.icons_dict["AutoUpdate"]["normal"]
+                                            )
         elif model_type in self.available_sam_models:
             self.wand_threshold = 0.5
             self.wand_edge_tolerance_slider.configure(state="disabled",
                                                       button_color=["gray60", "gray45"]
                                                       )
+            self.wand_auto_update.configure(state="disabled",
+                                            image=self.icons_dict["AutoUpdate"]["disabled"])
             if model_type != self.last_sam_model:
                 self.last_sam_model = model_type
                 self.sam_loader(model_type)
@@ -3175,6 +3181,49 @@ class SegmentationApp(ctk.CTk):
         self.update_display(update_image=False)
         self.set_status("ready", "Ready")
 
+    #%% BAYESIAN OPTIMIZATION
+    def wand_update_bayesian(self): # TODO clean and adapt to SAM
+        """
+        Use Bayesian optimization to update magic wand parameters
+        """
+        path_directory =  filedialog.askdirectory()
+        if not path_directory:
+            return
+        
+        if self.active_mask_id is None:
+            return
+        
+        try:
+            BO = BayesianOptimization(path_directory,
+                                      model_inference=region_growing_model_inference,
+                                      model_preprocessing=region_growing_preprocessing
+                                      )
+        except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
+            return
+        
+        self.set_status("loading", "Optimizing parameters...")
+        results = BO.optimize(mask_label=self.active_mask_id,
+                              initial_points=self.slimtag_config["bayesian_optimization"]["initial_points"],
+                              maxiter=self.slimtag_config["bayesian_optimization"]["max_iterations"],
+                              n_points=self.slimtag_config["bayesian_optimization"]["n_points"]
+                              )
+        
+        self.wand_brightness = min(max(round(results["best_params"]["brightness"]), -100), 100)
+        self.wand_contrast = min(max(round(results["best_params"]["contrast"]), -100), 100)
+        self.wand_gamma = min(max(round(results["best_params"]["shadows"]), -100), 100)
+        self.wand_threshold = min(max(round(results["best_params"]["threshold"]), 0.0), 1.0)
+        self.wand_edge_tolerance = min(max(round(results["best_params"]["grad_edge"]), 0.0), 1.0)
+        
+        self.wand_brightness_lbl.configure(text=str(self.wand_brightness))
+        self.wand_contrast_lbl.configure(text=str(self.wand_contrast))
+        self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
+        self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
+        self.wand_threshold_slider.set(self.wand_threshold)
+        self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
+        self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+        
+        self.set_status("ready", "Ready")
+        
 #%% Main cycle
 if __name__ == "__main__":
     SegmentationApp().mainloop()

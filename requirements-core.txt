@@ -11,3 +11,6 @@ screeninfo==0.8.1
 
 # Config file management
 tomlkit==0.14.0
+
+# for Bayesian methods
+scikit-optimize==0.10.2
