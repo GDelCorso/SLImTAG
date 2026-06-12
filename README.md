@@ -239,7 +239,7 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 
 #### Brush
 
-- [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
+- [x] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 
 #### Magic wand
 
