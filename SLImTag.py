@@ -1612,6 +1612,8 @@ class SegmentationApp(ctk.CTk):
         
         if self.undo_stack:
             self.mask_orig = self.undo_stack.pop()
+            if(self.drag_draw):
+                self.mask_orig = self.undo_stack.pop()
             self.update_lock()
             self.update_display(update_image=False)
 
@@ -2479,6 +2481,7 @@ class SegmentationApp(ctk.CTk):
         self.on_canvas_left_release(e)
 
     def on_canvas_drag(self, e):
+        self.drag_draw = False
         if self.image_orig is None:
             return
         '''
@@ -2504,6 +2507,7 @@ class SegmentationApp(ctk.CTk):
         if not (self.tool_active["brush"] or self.tool_active["eraser"]):
             return
         
+        self.drag_draw = True
         # Define the brush drag
         x1 = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y1 = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
