@@ -1966,7 +1966,7 @@ class SegmentationApp(ctk.CTk):
         # reset masks
         self.clear_all_masks()
         
-        img = Image.open(p).convert("RGB")
+        img = Image.open(p).convert("RGBA").convert("RGB")
         
         self.load_image(img, change_canvas="default")
         
