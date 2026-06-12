@@ -19,6 +19,7 @@ import time
 import shutil
 import io
 import warnings
+import math
 
 # Numerical arrays manipulation
 import numpy as np
@@ -616,10 +617,10 @@ class SegmentationApp(ctk.CTk):
         # Brush options
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Shape", fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=10, pady=(10, 2))
-        self.brush_shape_btn = ctk.CTkSegmentedButton(self.tool_opt_frame["brush"], values=["Circle", "Square", "Line"], command=None)
-        self.brush_shape_btn.set("Circle") # TODO implement shape
+        self.brush_shape_btn = ctk.CTkSegmentedButton(self.tool_opt_frame["brush"], values=["Circle", "Square", "Line"], command=lambda v: (setattr(self, "brush_shape", v), print (self.brush_shape)));
+        self.brush_shape_btn.set(self.brush_shape) # TODO implement shape
         self.brush_shape_btn.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
-        self.brush_shape_btn.configure(state="disabled") # TODO remove when implemented
+        #self.brush_shape_btn.configure(state="disabled") # TODO remove when implemented
         
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Size", fg_color="transparent", anchor="w").grid(row=3, column=0, sticky="ew", padx=(10, 5), pady=(10, 2)) #font=ctk.CTkFont(size=11),
         self.brush_size_lbl = ctk.CTkLabel(self.tool_opt_frame["brush"], text=str(self.brush_size), fg_color="transparent", anchor="e")
@@ -636,7 +637,7 @@ class SegmentationApp(ctk.CTk):
                                               command=lambda v: (setattr(self,"brush_rot",int(v)), self.brush_rot_lbl.configure(text=f"{self.brush_rot}°")))
         self.brush_rot_slider.set(self.brush_rot) # TODO implement rotation
         self.brush_rot_slider.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
-        self.brush_rot_slider.configure(state="disabled") # TODO remove when implemented
+        #self.brush_rot_slider.configure(state="disabled") # TODO remove when implemented
         
         # Magic wand options
         wand_models = ["Region growing"] + self.available_sam_models
@@ -1156,6 +1157,8 @@ class SegmentationApp(ctk.CTk):
         w = int(self.view_w / self.preview_scale)
         h = int(self.view_h / self.preview_scale)
         self.current_preview_canvas.create_rectangle(x, y, x+w, y+h, outline=HIGHLIGHT_COLOR, width=2, tag="rectangle")
+        
+                
     
     #%% UPDATE DISPLAY
     def update_display(self, update_image=True, update_blended=True):
@@ -1296,7 +1299,9 @@ class SegmentationApp(ctk.CTk):
                 overlay_prev[self.sam_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
                 blended = Image.alpha_composite(blended, Image.fromarray(overlay_prev))
         self.blended = blended.convert("RGB")
-    
+        if self.tool_active["brush"]:
+            self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+
     def display_blended(self):
         """
         Show precomputed preview during pan & zoom events
@@ -1614,6 +1619,8 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig = self.undo_stack.pop()
             self.update_lock()
             self.update_display(update_image=False)
+            if self.tool_active["brush"]:
+                self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
 
     #%% MASK MANAGEMENT
@@ -2511,7 +2518,7 @@ class SegmentationApp(ctk.CTk):
         
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
-            if(self.tool_active["brush"]):
+            if self.tool_active["brush"]:
                 self.undo()
             self.push_undo() # TODO: Check problem for undo
             self.brush_at(x1, y1, add=(self.tool_active["brush"] and not shift_pressed))
@@ -2830,8 +2837,34 @@ class SegmentationApp(ctk.CTk):
         outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
         dash = (5,10) if (shift_pressed or self.tool_active["eraser"]) else None
 
-        self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
-        
+
+        match self.brush_shape:
+            case 'Circle':
+                self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
+            case 'Square':
+                self._draw_not_oval_brush([x-r, y-r, x+r, y-r, x+r, y+r, x-r, y+r], (x,y), outline_color, dash)
+                #self.canvas.create_rectangle(x0, y0, x1, y1, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
+            case 'Line':
+                self._draw_not_oval_brush([x-2, y-r, x+2, y-r, x+2, y+r, x-2, y+r], (x,y), outline_color, dash)
+                #self.canvas.create_rectangle(x0, y0, x1, y1, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
+                
+    def _draw_not_oval_brush(self, points, pivot, outline_color, dash):
+        points = self._rotate_points(points, self.brush_rot, pivot)
+        for i in range(0, len(points), 2):
+            x0, y0 = points[i], points[i+1]
+            x1, y1 = points[i+2 if i+2 <len(points) else 0], points[i+3 if i+3 <len(points) else 1]
+            self.canvas.create_line(x0, y0, x1, y1, fill=outline_color, dash=dash, width=2, tag="brush")
+                
+    def _rotate_points(self, points, angle_deg, pivot):
+        cx, cy = pivot
+        a = math.radians(angle_deg)
+        c, s = math.cos(a), math.sin(a)
+        out = []
+        for i in range(0, len(points), 2):
+            x, y = points[i] - cx, points[i+1] - cy
+            xr, yr = x*c - y*s + cx, x*s + y*c + cy
+            out.extend([xr, yr])
+        return out
     # SAM
     def sam_add_point(self, e, add=True, multipoint=False):
         """
