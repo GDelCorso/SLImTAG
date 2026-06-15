@@ -2463,6 +2463,8 @@ class SegmentationApp(ctk.CTk):
     def on_canvas_mid_release(self, e):
         self.mid_pressed = False
         self._pan_start = None 
+        self.update_display(update_image=True)
+        self.draw_brush_preview(e)
 
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
