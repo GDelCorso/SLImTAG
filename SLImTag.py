@@ -257,6 +257,7 @@ class SegmentationApp(ctk.CTk):
         self.brush_shape = "Circle"
         self.brush_size = 30
         self.brush_rot = 0
+        self.brush_line_ratio = 8 # ( r//8 | r )
         
         # smooth control
         self.smooth_iter = 1 # number of iterations of outer cycle
@@ -2520,9 +2521,10 @@ class SegmentationApp(ctk.CTk):
         
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
+            # If brush is active, undo also the starting point
             if self.tool_active["brush"]:
                 self.undo()
-            self.push_undo() # TODO: Check problem for undo
+            self.push_undo() 
             self.brush_at(x1, y1, add=(self.tool_active["brush"] and not shift_pressed))
             self.update_display(update_image=False, update_blended=False)
             self.draw_brush_preview(e)
@@ -2541,7 +2543,7 @@ class SegmentationApp(ctk.CTk):
             dy = y1 - y0
             dist = max(1, int(np.hypot(dx, dy))) # Distance between previous and current point (in pixel)
             r = max(1, self.brush_size // 2)
-            steps = max(3, dist*3 // r) # draw this number of circles along (x0, y0) and (x1, y1)
+            steps = self.brush_line_ratio * 20 if self.brush_shape == 'Line' else max(3, dist*3 // r) # draw this number of mask shape along (x0, y0) and (x1, y1)
             for i in np.linspace(0, dist + 1, steps):
                 xi = int(x0 + dx * i / dist)
                 yi = int(y0 + dy * i / dist)
@@ -2792,22 +2794,35 @@ class SegmentationApp(ctk.CTk):
         ys = np.arange(y0, y1)
         xs = np.arange(x0, x1)
         
-        # Efficient broadcasting to create circle mask
+        # Efficient broadcasting to create mask
         dy = ys[:, None] - y  # shape (height, 1)
         dx = xs[None, :] - x  # shape (1, width)
-        circle = dx**2 + dy**2 <= r*r + 4 # boolean array, shape (y1-y0, x1-x0)
         
+        match self.brush_shape:
+            case 'Circle':
+                effective_mask_area = dx**2 + dy**2 <= r*r + 4 # boolean array, shape (y1-y0, x1-x0)
+            case 'Square':
+                theta = np.radians(self.brush_rot)  
+                dx_rot = dx * np.cos(theta) + dy * np.sin(theta)
+                dy_rot = -dx * np.sin(theta) + dy * np.cos(theta)
+                effective_mask_area = (np.abs(dx_rot) <= r) & (np.abs(dy_rot) <= r)
+            case 'Line':
+                theta = np.radians(self.brush_rot)  
+                dx_rot = dx * np.cos(theta) + dy * np.sin(theta)
+                dy_rot = -dx * np.sin(theta) + dy * np.cos(theta)
+                effective_mask_area = (np.abs(dx_rot) <= r // self.brush_line_ratio) & (np.abs(dy_rot) <= r )
+
         # Slice of the mask corresponding to the bounding box
         mask_area = self.mask_orig[y0:y1, x0:x1]
         lock_area = self.mask_locked[y0:y1, x0:x1]
         
         if add:
             # Paint only on non-locked pixels
-            mask_area[circle & (~lock_area)] = self.active_mask_id
+            mask_area[effective_mask_area & (~lock_area)] = self.active_mask_id
         else:
             # Erase only pixels that match the active mask label
             # (independently from their locked status)
-            erase_mask = circle & (mask_area == self.active_mask_id)
+            erase_mask = effective_mask_area & (mask_area == self.active_mask_id)
             mask_area[erase_mask] = 0
         
         # Update locked status
@@ -2819,8 +2834,8 @@ class SegmentationApp(ctk.CTk):
 
     def draw_brush_preview(self, e):
         '''
-        Draws a semi-transparent circle on the canvas to show the brush size
-        and position before painting. The circle is solid in 'add mask' mode
+        Draws a semi-transparent mask contour on the canvas to show the brush size
+        and position before painting. The contour is solid in 'add mask' mode
         and dashed in 'remove mask' mode.
         '''
         self.mouse['x'], self.mouse['y'] = e.x, e.y # store mouse position
@@ -2847,7 +2862,7 @@ class SegmentationApp(ctk.CTk):
                 self._draw_not_oval_brush([x-r, y-r, x+r, y-r, x+r, y+r, x-r, y+r], (x,y), outline_color, dash)
                 #self.canvas.create_rectangle(x0, y0, x1, y1, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
             case 'Line':
-                self._draw_not_oval_brush([x-2, y-r, x+2, y-r, x+2, y+r, x-2, y+r], (x,y), outline_color, dash)
+                self._draw_not_oval_brush([x-r // self.brush_line_ratio, y-r, x+r // self.brush_line_ratio, y-r, x+r // self.brush_line_ratio, y+r, x-r // self.brush_line_ratio, y+r], (x,y), outline_color, dash)
                 #self.canvas.create_rectangle(x0, y0, x1, y1, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
                 
     def _draw_not_oval_brush(self, points, pivot, outline_color, dash):
