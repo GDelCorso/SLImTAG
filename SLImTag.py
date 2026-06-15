@@ -258,7 +258,8 @@ class SegmentationApp(ctk.CTk):
         self.brush_size = 30
         self.brush_rot = 0
         self.brush_line_ratio = 8 # ( r//8 | r )
-        
+        self.BRUSH_ROTATION_DELTA = 10
+
         # smooth control
         self.smooth_iter = 1 # number of iterations of outer cycle
         self.smooth_n_erosions = 1
@@ -635,8 +636,8 @@ class SegmentationApp(ctk.CTk):
         self.brush_rot_lbl = ctk.CTkLabel(self.tool_opt_frame["brush"], text=f"{self.brush_rot}°", fg_color="transparent", anchor="e")
         self.brush_rot_lbl.grid(row=5, column=1, sticky="ew", padx=(5, 10), pady=(10, 2))
         self.brush_rot_slider = ctk.CTkSlider(self.tool_opt_frame["brush"], from_=0, to=180,
-                                              command=lambda v: (setattr(self,"brush_rot",int(v)), self.brush_rot_lbl.configure(text=f"{self.brush_rot}°")))
-        self.brush_rot_slider.set(self.brush_rot) # TODO implement rotation
+                                              command=lambda v: self.set_brush_rotation_slider(v))
+        self.update_brush_rotation_slider()
         self.brush_rot_slider.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         #self.brush_rot_slider.configure(state="disabled") # TODO remove when implemented
         
@@ -1120,6 +1121,14 @@ class SegmentationApp(ctk.CTk):
                 self.modified = False
             self.update_title()
     
+    def set_brush_rotation_slider(self, v):
+        self.brush_rot = int(v)
+        self.update_brush_rotation_slider()
+
+    def update_brush_rotation_slider(self):
+        self.brush_rot_lbl.configure(text=f"{self.brush_rot}°")
+        self.brush_rot_slider.set(self.brush_rot) # TODO implement rotation
+
     #%% APPEARANCE (DARK/LIGHT)
     def toggle_appearance(self):
         ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
@@ -1359,9 +1368,9 @@ class SegmentationApp(ctk.CTk):
         self.canvas.bind("<Button-1>", self.on_canvas_left)
         self.canvas.bind("<Button-2>", self.on_canvas_mid)
         self.canvas.bind("<Button-3>", self.on_canvas_right)
-        self.canvas.bind("<Button-4>", self.zoom_in) # <Button-4> is scroll up for Linux
-        self.canvas.bind("<Button-5>", self.zoom_out) # <Button-5> is scroll down for Linux
-        self.canvas.bind("<MouseWheel>", self.zoom_evt)
+        self.canvas.bind("<Button-4>", self.wheel_up) # <Button-4> is scroll up for Linux
+        self.canvas.bind("<Button-5>", self.wheel_down) # <Button-5> is scroll down for Linux
+        self.canvas.bind("<MouseWheel>", self.wheel_evt)
         self.canvas.bind("<Motion>", self.draw_brush_preview, add="+")
         self.canvas.bind("<Motion>", self.on_canvas_track, add="+")
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
@@ -2625,6 +2634,40 @@ class SegmentationApp(ctk.CTk):
         self.update_display(update_image=True)
         self.update_preview_frame()
     
+    def wheel_evt(self, e):
+        ctrl_pressed = (e.state & 0x0004) != 0
+        if (self.tool_active['brush'] and ctrl_pressed):
+            return self.brush_rotate(e)
+        self.zoom_evt(e)
+
+    def wheel_up(self, e):
+        ctrl_pressed = (e.state & 0x0004) != 0
+        if (self.tool_active['brush'] and ctrl_pressed):
+            e.delta = self.BRUSH_ROTATION_DELTA;
+            return self.brush_rotate(e)
+        self.zoom_in(e)
+
+    def wheel_down(self, e):
+        ctrl_pressed = (e.state & 0x0004) != 0
+        if (self.tool_active['brush'] and ctrl_pressed):
+            e.delta = -self.BRUSH_ROTATION_DELTA;
+            return self.brush_rotate(e)
+        self.zoom_out(e)
+
+    def brush_rotate(self, e):
+        if self.brush_shape == 'Circle':
+            return
+        
+        self.brush_rot = self.brush_rot + e.delta
+
+        if self.brush_rot > 180:
+            self.brush_rot = 0 + abs(e.delta)
+        if self.brush_rot < 0:
+            self.brush_rot = 180 - abs(e.delta)
+
+        self.update_brush_rotation_slider() # TODO implement rotation
+        self.draw_brush_preview(e)
+
     def zoom_evt(self, e):
         '''
         Adjusts the zoom level of the displayed image based on mouse wheel 
@@ -2673,6 +2716,7 @@ class SegmentationApp(ctk.CTk):
         # if still resizing, schedule a new event
         self.zoom_event_id = self.after(300, self.update_display)
         self.update_preview_frame()
+        self.draw_brush_preview(e)
         self.set_status("ready", "Ready")
 
 
@@ -2713,6 +2757,7 @@ class SegmentationApp(ctk.CTk):
         # if still resizing, schedule a new event
         self.zoom_event_id = self.after(300, self.update_display)
         self.update_preview_frame()
+        self.draw_brush_preview(e)
         self.set_status("ready", "Ready")
         
         
