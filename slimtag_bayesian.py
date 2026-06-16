@@ -87,7 +87,7 @@ class BayesianOptimization():
         """
         ys, xs = np.where(mask)
         if len(xs) == 0: # this should not happen given the checks in objective()
-            raise ValueError(f"Mask label {mask_label} not found in mask")
+            raise ValueError("Provided mask has only False values")
         coords = np.stack([xs, ys], axis=1)
         n_points = min(n_points, len(coords)) # in case there are too few points with label
         idx = np.random.choice(len(coords), size=n_points, replace=False)
@@ -163,7 +163,6 @@ class BayesianOptimization():
             Real(0.01, max_threshold, name="threshold"),
             Real(0.01, 0.9, name="grad_edge"),
         ]
-        
         
         def objective_wrapper(parameters):
             return -self.objective(parameters, mask_label=mask_label, n_points=n_points)

@@ -22,6 +22,7 @@ preprocessing is the result of <method>_preprocessing
 """
 import numpy as np
 from scipy import ndimage
+from scipy.special import expit # sigmoid
 
 def region_growing_preprocessing(image):
     # REGION GROWING (need 0-255 matrices BUT with float dtype)
@@ -38,7 +39,8 @@ def region_growing_preprocessing(image):
     img_grad = np.clip(img_grad / (p + 1e-8), 0, 1)
     return {"rgb": img_rgb, "gray": img_gray, "edge": img_grad}
 
-def region_growing_inference(image, point, parameters, preprocessing=None):
+def region_growing_inference(image, point, parameters, # model_inference mandatory args
+                             preprocessing=None): # model_inference mandatory kwarg
     """
     Interactive region growing segmentation with optional RGB/grayscale similarity,
     robust seed estimation, edge-aware filtering, morphological cleanup, and
@@ -163,3 +165,22 @@ def region_growing_inference(image, point, parameters, preprocessing=None):
         region = region | small_holes
 
     return region
+
+def sam_preprocessing(image, model):
+    model.set_image(image)
+    return None
+
+def sam_inference(image, point, parameters, # model_inference mandatory args
+                  model, # sam_inference arg
+                  preprocessing=None, # model_inference mandatory kwarg (not used for SAM)
+                  pt_labels=np.array([1]), multipoint=False): # sam_inference kwargs
+    # default values if parameters does not contain those
+    thres = parameters.get("threshold", 0.5)
+    masks, scores, _ = model.predict(np.array([point]),
+                                     pt_labels,
+                                     multimask_output=not multipoint,
+                                     return_logits=True)
+
+    masks = expit(masks) > thres
+    i = np.argmax(scores)
+    return masks[i]

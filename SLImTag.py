@@ -23,7 +23,6 @@ import warnings
 # Numerical arrays manipulation
 import numpy as np
 from scipy import ndimage # for region operations (growing, dilation, erosion, fill holes)
-from scipy.special import expit # sigmoid
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
@@ -47,8 +46,7 @@ from slimtag_utils import MultiButtonDialog, MaskEditDialog
 from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
-from slimtag_bayesian_oscar import BayesianOptimization
-#from slimtag_bayesian import region_growing_model_inference, region_growing_preprocessing # TODO remove and reimplement from main file
+from slimtag_bayesian import BayesianOptimization
 import slimtag_wand as wand
 
 # Asynchronous threading import
@@ -895,7 +893,7 @@ class SegmentationApp(ctk.CTk):
             # SAM computation
             if self.slimtag_config["modules"]["sam"]:
                 if self.sam is not None:
-                    self.sam.set_image(image)
+                    wand.sam_preprocessing(image, self.sam)
             
             # Turn on switch
             self.switch_computed_magic_wand = True
@@ -936,16 +934,16 @@ class SegmentationApp(ctk.CTk):
             self.wand_edge_tolerance_slider.configure(state="normal",
                                                       button_color=ctk.ThemeManager.theme["CTkSlider"]["button_color"]
                                                       )
-            self.wand_auto_update.configure(state="normal",
-                                            image=self.icons_dict["AutoUpdate"]["normal"]
-                                            )
+            # self.wand_auto_update.configure(state="normal",
+            #                                 image=self.icons_dict["AutoUpdate"]["normal"]
+            #                                 )
         elif model_type in self.available_sam_models:
             self.wand_threshold = 0.5
             self.wand_edge_tolerance_slider.configure(state="disabled",
                                                       button_color=["gray60", "gray45"]
                                                       )
-            self.wand_auto_update.configure(state="disabled",
-                                            image=self.icons_dict["AutoUpdate"]["disabled"])
+            # self.wand_auto_update.configure(state="disabled",
+            #                                 image=self.icons_dict["AutoUpdate"]["disabled"])
             if model_type != self.last_sam_model:
                 self.last_sam_model = model_type
                 self.sam_loader(model_type)
@@ -2418,7 +2416,7 @@ class SegmentationApp(ctk.CTk):
             self.fill_connected_component(e)
             return
         
-        if self.tool_active["wand"] and check_inside_image:
+        if self.tool_active["wand"] and check_inside_image: # TODO implement with match
             if self.wand_model_menu.get() == "Region growing":
                 self.region_growing(e)
             elif self.wand_model_menu.get() in self.available_sam_models:
@@ -2427,8 +2425,14 @@ class SegmentationApp(ctk.CTk):
                 return
             return
         
-        if self.tool_active["wand_multi"] and check_inside_image:
-            self.sam_add_point(e, add=not shift_pressed, multipoint=True)
+        if self.tool_active["wand_multi"] and check_inside_image: # TODO implement with match
+            if self.wand_model_menu.get() == "Region growing":
+                MultiButtonDialog(self, message="Multipoint magic wand currently implemented for SAM models only", buttons=[("OK", None)])
+                return
+            elif self.wand_model_menu.get() in self.available_sam_models:
+                self.sam_add_point(e, add=not shift_pressed, multipoint=True)
+            else:
+                return
             return
         
         if (self.tool_active["brush"] or self.tool_active["eraser"]) and check_inside_image:
@@ -2857,15 +2861,15 @@ class SegmentationApp(ctk.CTk):
         if (self.image_orig is None) or (self.active_mask_id is None) or (not self.sam_points):
             return
         self.set_status("loading", "SAM computing...")
-            
-        masks, scores, _ = self.sam.predict(np.array(self.sam_points),
-                                            np.array(self.sam_pt_labels),
-                                            multimask_output=not multipoint,
-                                            return_logits=True)
-
-        masks = expit(masks) > self.wand_threshold
-        i = np.argmax(scores)
-        self.sam_preview[masks[i] & (~self.mask_locked)] = True
+        
+        # image = None, since preprocessing embedded image in model
+        mask = wand.sam_inference(None,
+                                  point=np.array(self.sam_points),
+                                  pt_labels=np.array(self.sam_pt_labels),
+                                  parameters={"threshold": self.wand_threshold},
+                                  model=self.sam,
+                                  multipoint=multipoint)
+        self.sam_preview[mask & (~self.mask_locked)] = True
         
         if multipoint: # to show preview
             self.update_display(update_image=False)
@@ -3088,18 +3092,6 @@ class SegmentationApp(ctk.CTk):
         self.update_display(update_image=False)
         self.set_status("ready", "Ready")
     
-    # #%% WAND METHODS
-    # def region_growing_preprocessing(self, img):
-    #     """
-    #     Compute preprocessing data for region growing method.
-        
-    #     Preprocessing needed for region growing consists of an RGB image, a
-    #     grayscale image, and a matrix with edge intensity depending on the
-    #     parameters of region_growing_inference
-    #     """
-        
-    #     return (region_growing_rgb, region_growing_gray, region_growing_edge)
-
     #%% BAYESIAN OPTIMIZATION
     def wand_update_bayesian(self): # TODO clean and adapt to SAM
         """
@@ -3113,10 +3105,18 @@ class SegmentationApp(ctk.CTk):
             return
         
         try:
-            BO = BayesianOptimization(path_directory,
-                                      model_inference=wand.region_growing_inference,
-                                      model_preprocessing=wand.region_growing_preprocessing
-                                      )
+            if self.wand_model_menu.get() == "Region growing":
+                BO = BayesianOptimization(path_directory,
+                                          model_inference=wand.region_growing_inference,
+                                          model_preprocessing=wand.region_growing_preprocessing
+                                          )
+            elif self.wand_model_menu.get() in self.available_sam_models:
+                BO = BayesianOptimization(path_directory,
+                                          model_inference=lambda img, pt, parameters, preprocessing=None: wand.sam_inference(img, pt, parameters, model=self.sam, preprocessing=preprocessing),
+                                          model_preprocessing=lambda img: wand.sam_preprocessing(img, self.sam)
+                                          )
+            else:
+                return
         except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
             return
         
@@ -3138,8 +3138,9 @@ class SegmentationApp(ctk.CTk):
         self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
         self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
         self.wand_threshold_slider.set(self.wand_threshold)
-        self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
-        self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+        if self.wand_model_menu.get() == "Region growing":
+            self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
+            self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
         
         self.set_status("ready", "Ready")
         
