@@ -257,8 +257,8 @@ class SegmentationApp(ctk.CTk):
         self.brush_shape = "Circle"
         self.brush_size = 30
         self.brush_rot = 0
-        self.brush_line_ratio = 8 # ( r//8 | r )
-        self.BRUSH_ROTATION_DELTA = 10
+        self.brush_line_ratio = 8 # 'Line' shape is a rectangle with dimension (self.brush_size)x((self.brush_size)/(2*self.brush_line_ratio))
+        self.brush_rot_delta = 10 # number of degrees added to or subracted from self.brush_rot for each step of mouse wheel (for Ctrl+Wheel rotation)
 
         # smooth control
         self.smooth_iter = 1 # number of iterations of outer cycle
@@ -303,9 +303,10 @@ class SegmentationApp(ctk.CTk):
         # Region growing edge tolerance
         self.wand_edge_tolerance = 0.5
         
-        # boolean to track if mouse buttons are pressed
-        self.b3_pressed = False
-        self.mid_pressed = False
+        # boolean to track if buttons are pressed
+        self.b3_pressed = False # right mouse button
+        self.mid_pressed = False # middle mouse button
+        self.shift_pressed = False # shift (any)
         
         # asynchronous mechanism to speed up image loading
         self.switch_computed_magic_wand = False     # True if SAM is loaded
@@ -620,9 +621,8 @@ class SegmentationApp(ctk.CTk):
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Shape", fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=10, pady=(10, 2))
         self.brush_shape_btn = ctk.CTkSegmentedButton(self.tool_opt_frame["brush"], values=["Circle", "Square", "Line"], command=lambda v: (setattr(self, "brush_shape", v), print (self.brush_shape)));
-        self.brush_shape_btn.set(self.brush_shape) # TODO implement shape
+        self.brush_shape_btn.set(self.brush_shape)
         self.brush_shape_btn.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
-        #self.brush_shape_btn.configure(state="disabled") # TODO remove when implemented
         
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Size", fg_color="transparent", anchor="w").grid(row=3, column=0, sticky="ew", padx=(10, 5), pady=(10, 2)) #font=ctk.CTkFont(size=11),
         self.brush_size_lbl = ctk.CTkLabel(self.tool_opt_frame["brush"], text=str(self.brush_size), fg_color="transparent", anchor="e")
@@ -639,7 +639,6 @@ class SegmentationApp(ctk.CTk):
                                               command=lambda v: self.set_brush_rotation_slider(v))
         self.update_brush_rotation_slider()
         self.brush_rot_slider.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
-        #self.brush_rot_slider.configure(state="disabled") # TODO remove when implemented
         
         # Magic wand options
         wand_models = ["Region growing"] + self.available_sam_models
@@ -826,13 +825,13 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Q>", lambda e: self.quit_program())
         
         self.bind("<Tab>", lambda e: self.tab())
-        self.bind("<Shift-Tab>", lambda e: self.shiftTab())
-        self.bind("<ISO_Left_Tab>", lambda e: self.shiftTab()) # for linux
+        self.bind("<Shift-Tab>", lambda e: self.shift_tab())
+        self.bind("<ISO_Left_Tab>", lambda e: self.shift_tab()) # for linux
         
-        self.bind("<KeyPress-Shift_L>", lambda e: self.shiftPressed())
-        self.bind("<KeyPress-Shift_R>", lambda e: self.shiftPressed())
-        self.bind("<KeyRelease-Shift_L>", lambda e: self.shiftReleased())
-        self.bind("<KeyRelease-Shift_R>", lambda e: self.shiftReleased())
+        self.bind("<KeyPress-Shift_L>", lambda e: self.shift_key_pressed())
+        self.bind("<KeyPress-Shift_R>", lambda e: self.shift_key_pressed())
+        self.bind("<KeyRelease-Shift_L>", lambda e: self.shift_key_released())
+        self.bind("<KeyRelease-Shift_R>", lambda e: self.shift_key_released())
         
         # Next image
         self.bind("<KeyPress-period>", lambda e: self.next_image())
@@ -1120,14 +1119,6 @@ class SegmentationApp(ctk.CTk):
             else: # state == False
                 self.modified = False
             self.update_title()
-    
-    def set_brush_rotation_slider(self, v):
-        self.brush_rot = int(v)
-        self.update_brush_rotation_slider()
-
-    def update_brush_rotation_slider(self):
-        self.brush_rot_lbl.configure(text=f"{self.brush_rot}°")
-        self.brush_rot_slider.set(self.brush_rot) # TODO implement rotation
 
     #%% APPEARANCE (DARK/LIGHT)
     def toggle_appearance(self):
@@ -1268,6 +1259,11 @@ class SegmentationApp(ctk.CTk):
 
             # raise back SAM multipoints if any
             self.display_wand_multipoints()
+        
+        # if brush or eraser is active, draw preview
+        # there are some inconsistencies due to interactions with Shift and Ctrl, but whatever
+        if self.tool_active["brush"] or self.tool_active["eraser"]:
+            self._draw_brush_preview(self.mouse['x'], self.mouse['y'], shift_pressed=(self.shift_pressed or self.tool_active["eraser"]))
 
     def update_mask_opacity(self, v):
         self.mask_opacity = v
@@ -1309,8 +1305,8 @@ class SegmentationApp(ctk.CTk):
                 overlay_prev[self.sam_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
                 blended = Image.alpha_composite(blended, Image.fromarray(overlay_prev))
         self.blended = blended.convert("RGB")
-        if self.tool_active["brush"]:
-            self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+        # if self.tool_active["brush"]:
+        #     self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
     def display_blended(self):
         """
@@ -1551,6 +1547,14 @@ class SegmentationApp(ctk.CTk):
         self.hide_all_mask_btn.configure(state=state, image=self.icons_dict["EyeOpen"][state])
         self.lock_all_mask_btn.configure(state=state, image=self.icons_dict["LockOpen"][state])
 
+    def set_brush_rotation_slider(self, v):
+        self.brush_rot = int(v)
+        self.update_brush_rotation_slider()
+
+    def update_brush_rotation_slider(self):
+        self.brush_rot_lbl.configure(text=f"{self.brush_rot}°")
+        self.brush_rot_slider.set(self.brush_rot)
+
     #%% TOOL BUTTONS
     def create_tool_button(self, tool, btn_frame, row, col, command=None, last_row=False, help_text=''):
         """
@@ -1629,8 +1633,8 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig = self.undo_stack.pop()
             self.update_lock()
             self.update_display(update_image=False)
-            if self.tool_active["brush"]:
-                self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+            # if self.tool_active["brush"]:
+            #     self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
 
     #%% MASK MANAGEMENT
@@ -2530,10 +2534,10 @@ class SegmentationApp(ctk.CTk):
         
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
-            # If brush is active, undo also the starting point
+            # If brush is active, remove the starting point generated by first click event
             if self.tool_active["brush"]:
                 self.undo()
-            self.push_undo() 
+            self.push_undo()
             self.brush_at(x1, y1, add=(self.tool_active["brush"] and not shift_pressed))
             self.update_display(update_image=False, update_blended=False)
             self.draw_brush_preview(e)
@@ -2575,19 +2579,46 @@ class SegmentationApp(ctk.CTk):
         
         self.pos_label_var.set(f"| x: {x1} | y: {y1} |")
 
-    #%% KEYBOARD EVENTS
-    def shiftPressed(self):
-        # in case brush is active, set preview to "dashed"
-        self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
+    def wheel_evt(self, e):
+        ctrl_pressed = (e.state & 0x0004) != 0
+        if ((self.tool_active['brush'] or self.tool_active['eraser']) and ctrl_pressed):
+            return self.brush_rotate(e)
+        self.zoom_evt(e)
 
-    def shiftReleased(self):
-        # in case brush is active, set preview to "solid"
+    def wheel_up(self, e):
+        ctrl_pressed = (e.state & 0x0004) != 0
+        if ((self.tool_active['brush'] or self.tool_active['eraser']) and ctrl_pressed):
+            e.delta = self.brush_rot_delta
+            return self.brush_rotate(e)
+        self.zoom_in(e)
+
+    def wheel_down(self, e):
+        ctrl_pressed = (e.state & 0x0004) != 0
+        if ((self.tool_active['brush'] or self.tool_active['eraser']) and ctrl_pressed):
+            e.delta = -self.brush_rot_delta
+            return self.brush_rotate(e)
+        self.zoom_out(e)
+
+    #%% KEYBOARD EVENTS
+    def shift_key_pressed(self):
+        self.shift_pressed = True
+        self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
+    
+    def shift_key_released(self):
+        self.shift_pressed = False
         self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
+    # def shiftPressed(self):
+    #     # in case brush is active, set preview to "dashed"
+    #     self._draw_brush_preview(self.mouse['x'], self.mouse['y'], True)
+
+    # def shiftReleased(self):
+    #     # in case brush is active, set preview to "solid"
+    #     self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
 
     def tab(self):
         return self._tab(-1, 0, 1)
 
-    def shiftTab(self):
+    def shift_tab(self):
         return self._tab(0, -1, -1)
 
     def _tab(self, id_key_to_check, id_key_to_get, increment):
@@ -2627,46 +2658,14 @@ class SegmentationApp(ctk.CTk):
         '''
         Pan view when distance is fixed. Used e.g. to bind keyboard arrows
         '''
-        if not self.image_is_loaded():
+        if self.image_orig is None:
             return
         self.view_x += dx
         self.view_y += dy
         self.update_display(update_image=True)
         self.update_preview_frame()
-    
-    def wheel_evt(self, e):
-        ctrl_pressed = (e.state & 0x0004) != 0
-        if (self.tool_active['brush'] and ctrl_pressed):
-            return self.brush_rotate(e)
-        self.zoom_evt(e)
 
-    def wheel_up(self, e):
-        ctrl_pressed = (e.state & 0x0004) != 0
-        if (self.tool_active['brush'] and ctrl_pressed):
-            e.delta = self.BRUSH_ROTATION_DELTA;
-            return self.brush_rotate(e)
-        self.zoom_in(e)
 
-    def wheel_down(self, e):
-        ctrl_pressed = (e.state & 0x0004) != 0
-        if (self.tool_active['brush'] and ctrl_pressed):
-            e.delta = -self.BRUSH_ROTATION_DELTA;
-            return self.brush_rotate(e)
-        self.zoom_out(e)
-
-    def brush_rotate(self, e):
-        if self.brush_shape == 'Circle':
-            return
-        
-        self.brush_rot = self.brush_rot + e.delta
-
-        if self.brush_rot > 180:
-            self.brush_rot = 0 + abs(e.delta)
-        if self.brush_rot < 0:
-            self.brush_rot = 180 - abs(e.delta)
-
-        self.update_brush_rotation_slider() # TODO implement rotation
-        self.draw_brush_preview(e)
 
     def zoom_evt(self, e):
         '''
@@ -2683,7 +2682,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
-        if not self.image_is_loaded():
+        if self.image_orig is None:
             return
         
         # change status while zoom function is inefficient, so that user is aware
@@ -2716,7 +2715,7 @@ class SegmentationApp(ctk.CTk):
         # if still resizing, schedule a new event
         self.zoom_event_id = self.after(300, self.update_display)
         self.update_preview_frame()
-        self.draw_brush_preview(e)
+        self.draw_brush_preview(e) # force redraw of brush preview during zoom event
         self.set_status("ready", "Ready")
 
 
@@ -2725,7 +2724,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom out).
         '''
         # Check if an image is loaded
-        if not self.image_is_loaded():
+        if self.image_orig is None:
             return
         
         # change status while zoom function is inefficient, so that user is aware
@@ -2757,7 +2756,7 @@ class SegmentationApp(ctk.CTk):
         # if still resizing, schedule a new event
         self.zoom_event_id = self.after(300, self.update_display)
         self.update_preview_frame()
-        self.draw_brush_preview(e)
+        self.draw_brush_preview(e)  # force redraw of brush preview during zoom event
         self.set_status("ready", "Ready")
         
         
@@ -2765,7 +2764,7 @@ class SegmentationApp(ctk.CTk):
         '''
         Reset zoom (Ctrl-0, Ctrl-Space).
         '''
-        if not self.image_is_loaded():
+        if self.image_orig is None:
             return
         self.zoom = 1.0
         
@@ -2855,7 +2854,7 @@ class SegmentationApp(ctk.CTk):
                 theta = np.radians(self.brush_rot)  
                 dx_rot = dx * np.cos(theta) + dy * np.sin(theta)
                 dy_rot = -dx * np.sin(theta) + dy * np.cos(theta)
-                effective_mask_area = (np.abs(dx_rot) <= r // self.brush_line_ratio) & (np.abs(dy_rot) <= r )
+                effective_mask_area = (np.abs(dx_rot) <= r // self.brush_line_ratio) & (np.abs(dy_rot) <= r ) # TODO check rotation, something wrong with line
 
         # Slice of the mask corresponding to the bounding box
         mask_area = self.mask_orig[y0:y1, x0:x1]
@@ -2905,10 +2904,8 @@ class SegmentationApp(ctk.CTk):
                 self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
             case 'Square':
                 self._draw_not_oval_brush([x-r, y-r, x+r, y-r, x+r, y+r, x-r, y+r], (x,y), outline_color, dash)
-                #self.canvas.create_rectangle(x0, y0, x1, y1, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
             case 'Line':
                 self._draw_not_oval_brush([x-r // self.brush_line_ratio, y-r, x+r // self.brush_line_ratio, y-r, x+r // self.brush_line_ratio, y+r, x-r // self.brush_line_ratio, y+r], (x,y), outline_color, dash)
-                #self.canvas.create_rectangle(x0, y0, x1, y1, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
                 
     def _draw_not_oval_brush(self, points, pivot, outline_color, dash):
         points = self._rotate_points(points, self.brush_rot, pivot)
@@ -2916,7 +2913,14 @@ class SegmentationApp(ctk.CTk):
             x0, y0 = points[i], points[i+1]
             x1, y1 = points[i+2 if i+2 <len(points) else 0], points[i+3 if i+3 <len(points) else 1]
             self.canvas.create_line(x0, y0, x1, y1, fill=outline_color, dash=dash, width=2, tag="brush")
-                
+
+    def brush_rotate(self, e): # bound to wheel event
+        if self.brush_shape == 'Circle':
+            return
+        self.brush_rot = (self.brush_rot + e.delta) % 180
+        self.update_brush_rotation_slider()
+        self.draw_brush_preview(e)
+
     def _rotate_points(self, points, angle_deg, pivot):
         cx, cy = pivot
         a = math.radians(angle_deg)
@@ -2927,6 +2931,7 @@ class SegmentationApp(ctk.CTk):
             xr, yr = x*c - y*s + cx, x*s + y*c + cy
             out.extend([xr, yr])
         return out
+    
     # SAM
     def sam_add_point(self, e, add=True, multipoint=False):
         """
