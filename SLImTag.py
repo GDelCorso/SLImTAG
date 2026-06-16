@@ -47,8 +47,9 @@ from slimtag_utils import MultiButtonDialog, MaskEditDialog
 from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
-from slimtag_bayesian import BayesianOptimization
-from slimtag_bayesian import region_growing_model_inference, region_growing_preprocessing # TODO remove and reimplement from main file
+from slimtag_bayesian_oscar import BayesianOptimization
+#from slimtag_bayesian import region_growing_model_inference, region_growing_preprocessing # TODO remove and reimplement from main file
+import slimtag_wand as wand
 
 # Asynchronous threading import
 import threading
@@ -299,6 +300,8 @@ class SegmentationApp(ctk.CTk):
         self.wand_threshold = 0.15 # region growing has 0.15 as default value (SAM instead has 0.5)
         # Region growing edge tolerance
         self.wand_edge_tolerance = 0.5
+        
+        self.region_growing_preprocess = None
         
         # boolean to track if mouse buttons are pressed
         self.b3_pressed = False
@@ -886,19 +889,8 @@ class SegmentationApp(ctk.CTk):
             # apply adjustments to magic wand pre-computation
             image = adjust_image(np.array(self.image_orig), self.wand_brightness, self.wand_contrast, self.wand_gamma)
             
-            # REGION GROWING (need 0-255 matrices BUT with float dtype)
-            # grayscale: mimic PIL's convert("L"), which uses the ITU-R 601-2 luma transform
-            self.region_growing_gray = (0.299*image[..., 0] + 0.587*image[..., 1] + 0.114*image[..., 2]).astype(np.float32)
-            # RGB: just cast to expected dtype
-            self.region_growing_rgb = image.astype(np.float32)
-            # edge detection (computed on grayscale)
-            gx = ndimage.sobel(self.region_growing_gray, axis=1)
-            gy = ndimage.sobel(self.region_growing_gray, axis=0)
-            self.region_growing_grad = np.hypot(gx, gy)
-            # normalize gradient matrix to [0,1] for stability
-            #self.region_growing_grad = self.region_growing_grad / (self.region_growing_grad.max() + 1e-8)
-            p = np.percentile(self.region_growing_grad, 99)
-            self.region_growing_grad = np.clip(self.region_growing_grad / (p + 1e-8), 0, 1)
+            # compute preprocessing for region growing
+            self.region_growing_preprocess = wand.region_growing_preprocessing(image)
             
             # SAM computation
             if self.slimtag_config["modules"]["sam"]:
@@ -1959,7 +1951,7 @@ class SegmentationApp(ctk.CTk):
         # reset masks
         self.clear_all_masks()
         
-        img = Image.open(p).convert("RGB")
+        img = Image.open(p).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
         
         self.load_image(img, change_canvas="default")
         
@@ -2422,13 +2414,13 @@ class SegmentationApp(ctk.CTk):
             self.connected_component_click(e, remove_only=(self.tool_active["cut"] and not shift_pressed))
             return
         
-        if (self.tool_active["fill"]) and check_inside_image:
+        if self.tool_active["fill"] and check_inside_image:
             self.fill_connected_component(e)
             return
         
         if self.tool_active["wand"] and check_inside_image:
             if self.wand_model_menu.get() == "Region growing":
-                self.region_growing(e, tolerance = self.wand_threshold, max_grad_edge=self.wand_edge_tolerance)
+                self.region_growing(e)
             elif self.wand_model_menu.get() in self.available_sam_models:
                 self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             else:
@@ -2455,7 +2447,8 @@ class SegmentationApp(ctk.CTk):
    
     def on_canvas_mid_release(self, e):
         self.mid_pressed = False
-        self._pan_start = None 
+        self._pan_start = None
+        self.update_display(update_image=True)
 
     def on_canvas_left_release(self, e):
         self.last_brush_pos = None
@@ -2472,7 +2465,6 @@ class SegmentationApp(ctk.CTk):
         '''
         self.b3_pressed = True
         self.on_canvas_left(e)
-        return;
 
     def on_canvas_right_release(self, e):
         self.b3_pressed = False
@@ -2491,7 +2483,6 @@ class SegmentationApp(ctk.CTk):
         
         # Move the canvas if not tools selected
         if not any(self.tool_active[tool] for tool in self.tool_active) or self.mid_pressed:
-            
             if self._pan_start is not None:
                 x0, y0, ox0, oy0 = self._pan_start
                 self.view_x = ox0 -int((e.x - x0)*(self.view_w/self.canvas.winfo_width()))
@@ -2930,46 +2921,8 @@ class SegmentationApp(ctk.CTk):
              
     # NON-NEURAL METHODS
     # SCIPY REGION GROWING
-    def region_growing(self, e, tolerance=0.15, switch_robust_estimator=True, 
-                       switch_RGB=True, use_edges=True, max_grad_edge=0.5, 
-                       switch_erosion=False, switch_fill_hole=True, 
-                       max_hole_size=100):
-        """
-        Interactive region growing segmentation with optional RGB/grayscale similarity,
-        robust seed estimation, edge-aware filtering, morphological cleanup, and
-        selective hole filling.
-        
-        Parameters
-        ----------
-        e : event
-            Mouse click event (canvas coordinates).
-        
-        tolerance : float (0–1)
-            Similarity threshold for region growing (0 = strict, 1 = permissive).
-        
-        switch_robust_estimator : bool
-            Uses 3×3 trimmed mean seed estimation to reduce noise sensitivity.
-        
-        switch_RGB : bool
-            If True uses RGB Euclidean distance, otherwise grayscale intensity.
-        
-        use_edges : bool
-            Adds gradient-based edge stopping constraint.
-        
-        max_grad_edge : float (0–1)
-            Maximum normalized gradient allowed for region growing (lower = stricter).
-        
-        switch_erosion : bool
-            Applies morphological opening to break thin connections before labeling.
-        
-        switch_fill_hole : bool
-            Enables selective filling of small internal holes.
-        
-        max_hole_size : int
-            Maximum pixel area of holes to fill.
-        """
-        
-        
+    def region_growing(self, e):
+
         if self.image_orig is None or self.active_mask_id is None:
             return
         
@@ -2979,82 +2932,10 @@ class SegmentationApp(ctk.CTk):
         x = int((e.x) * (self.view_w / self.canvas.winfo_width())) + self.view_x
         y = int((e.y) * (self.view_h / self.canvas.winfo_height())) + self.view_y
         
-        # Select the seed value
-        if switch_robust_estimator:
-            # trimmed robust local estimator
-            if switch_RGB:
-                patch_rgb = self.region_growing_rgb[
-                    max(0, y-1):min(self.region_growing_rgb.shape[0], y+2),
-                    max(0, x-1):min(self.region_growing_rgb.shape[1], x+2)
-                ]
-                vals_rgb = patch_rgb.reshape(-1, 3)
-                med_rgb = np.median(vals_rgb, axis=0)
-                dist_rgb = np.sum((vals_rgb - med_rgb)**2, axis=1)
-                keep_idx_rgb = np.argsort(dist_rgb)[:5]
-                seed_val_rgb = vals_rgb[keep_idx_rgb].mean(axis=0)
-            else: # grayscale
-                patch_gray = self.region_growing_gray[
-                    max(0, y-1):min(self.region_growing_gray.shape[0], y+2),
-                    max(0, x-1):min(self.region_growing_gray.shape[1], x+2)
-                ].astype(np.float32)
-                vals_gray = patch_gray.flatten()
-                med_gray = np.median(vals_gray)
-                dist_gray = np.abs(vals_gray - med_gray)
-                keep_idx = np.argsort(dist_gray)[:5]
-                seed_val_gray = vals_gray[keep_idx].mean()
-        else:
-            # pixel-perfect estimator
-            seed_val_gray = self.region_growing_gray[y, x]
-            seed_val_rgb = self.region_growing_rgb[y, x]
-        
-        # Compute similarity score
-        if switch_RGB:
-            rgb = self.region_growing_rgb
-            dr = rgb[..., 0] - seed_val_rgb[0]
-            dg = rgb[..., 1] - seed_val_rgb[1]
-            db = rgb[..., 2] - seed_val_rgb[2]
-            diff = np.sqrt(dr*dr + dg*dg + db*db)
-        else: # grayscale
-            diff = np.abs(self.region_growing_gray - seed_val_gray) # in FLOAT 32
-        
-        # apply region growing
-        mask = diff < round(255 * tolerance)
-        
-        # post-processing: integrate edge information
-        if use_edges:
-            # integrates edges by removing all area with grad greater thatn max_grad_edge
-            mask = mask & (self.region_growing_grad < max_grad_edge)
-        
-        # post-processing: small erosion+dilation to break small connections between zones
-        if switch_erosion:
-            mask = ndimage.binary_opening(mask, structure=np.ones((3, 3)))
+        params = {"threshold": self.wand_threshold, "grad_edge": self.wand_edge_tolerance}
             
-        # extraction of single connected component
-        labeled, _ = ndimage.label(mask)
-        seed_label = labeled[y, x]
-        if seed_label == 0:
-            self.set_status("ready", "Ready")
-            return
-        region = (labeled == seed_label)
-        
-        # post-processing: fill small holes
-        if switch_fill_hole:
-            # holes = internal background of the region
-            holes = ndimage.binary_fill_holes(region) & (~region)
-            # label holes
-            hole_labels, _ = ndimage.label(holes)
-            # compute hole sizes
-            hole_sizes = np.bincount(hole_labels.ravel())
-            # keep only small holes
-            small_idx = np.where(hole_sizes <= max_hole_size)[0]
-            small_idx = small_idx[small_idx!=0]
-            # skip label 0 (not-holes) in the remote case that it is small too
-            small_holes = np.isin(
-                hole_labels,
-                small_idx
-            )
-            # fill only small holes
-            region = region | small_holes
+        # image = None, since all the info needed is in preprocessing
+        region = wand.region_growing_inference(None, [x, y], parameters=params, preprocessing=self.region_growing_preprocess)
         
         # update history, apply to mask and update display
         self.push_undo()
@@ -3206,6 +3087,18 @@ class SegmentationApp(ctk.CTk):
         self.mask_locked[self.mask_orig==0] = False
         self.update_display(update_image=False)
         self.set_status("ready", "Ready")
+    
+    # #%% WAND METHODS
+    # def region_growing_preprocessing(self, img):
+    #     """
+    #     Compute preprocessing data for region growing method.
+        
+    #     Preprocessing needed for region growing consists of an RGB image, a
+    #     grayscale image, and a matrix with edge intensity depending on the
+    #     parameters of region_growing_inference
+    #     """
+        
+    #     return (region_growing_rgb, region_growing_gray, region_growing_edge)
 
     #%% BAYESIAN OPTIMIZATION
     def wand_update_bayesian(self): # TODO clean and adapt to SAM
@@ -3221,8 +3114,8 @@ class SegmentationApp(ctk.CTk):
         
         try:
             BO = BayesianOptimization(path_directory,
-                                      model_inference=region_growing_model_inference,
-                                      model_preprocessing=region_growing_preprocessing
+                                      model_inference=wand.region_growing_inference,
+                                      model_preprocessing=wand.region_growing_preprocessing
                                       )
         except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
             return
