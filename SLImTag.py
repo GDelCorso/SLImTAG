@@ -46,7 +46,7 @@ from slimtag_utils import MultiButtonDialog, MaskEditDialog
 from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
-from slimtag_bayesian import BayesianOptimization
+from slimtag_bayesian import OptimizerDialog
 import slimtag_wand as wand
 
 # Asynchronous threading import
@@ -3093,56 +3093,62 @@ class SegmentationApp(ctk.CTk):
         self.set_status("ready", "Ready")
     
     #%% BAYESIAN OPTIMIZATION
-    def wand_update_bayesian(self): # TODO clean and adapt to SAM
-        """
-        Use Bayesian optimization to update magic wand parameters
-        """
-        path_directory =  filedialog.askdirectory()
-        if not path_directory:
+    def wand_update_bayesian(self):
+        if not self.mask_labels:
             return
+        OptimizerDialog(self) # TODO deactivate buttons
+    
+    # def wand_update_bayesian(self):
+    #     """
+    #     Use Bayesian optimization to update magic wand parameters
+    #     """
         
-        if self.active_mask_id is None:
-            return
+    #     path_directory =  filedialog.askdirectory()
+    #     if not path_directory:
+    #         return
         
-        try:
-            if self.wand_model_menu.get() == "Region growing":
-                BO = BayesianOptimization(path_directory,
-                                          model_inference=wand.region_growing_inference,
-                                          model_preprocessing=wand.region_growing_preprocessing
-                                          )
-            elif self.wand_model_menu.get() in self.available_sam_models:
-                BO = BayesianOptimization(path_directory,
-                                          model_inference=lambda img, pt, parameters, preprocessing=None: wand.sam_inference(img, pt, parameters, model=self.sam, preprocessing=preprocessing),
-                                          model_preprocessing=lambda img: wand.sam_preprocessing(img, self.sam)
-                                          )
-            else:
-                return
-        except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
-            return
+    #     if self.active_mask_id is None:
+    #         return
         
-        self.set_status("loading", "Optimizing parameters...")
-        results = BO.optimize(mask_label=self.active_mask_id,
-                              initial_points=self.slimtag_config["bayesian_optimization"]["initial_points"],
-                              maxiter=self.slimtag_config["bayesian_optimization"]["max_iterations"],
-                              n_points=self.slimtag_config["bayesian_optimization"]["n_points"]
-                              )
+    #     try:
+    #         if self.wand_model_menu.get() == "Region growing":
+    #             BO = BayesianOptimization(path_directory,
+    #                                       model_inference=wand.region_growing_inference,
+    #                                       model_preprocessing=wand.region_growing_preprocessing
+    #                                       )
+    #         elif self.wand_model_menu.get() in self.available_sam_models:
+    #             BO = BayesianOptimization(path_directory,
+    #                                       model_inference=lambda img, pt, parameters, preprocessing=None: wand.sam_inference(img, [pt], parameters, model=self.sam, preprocessing=preprocessing),
+    #                                       model_preprocessing=lambda img: wand.sam_preprocessing(img, self.sam)
+    #                                       )
+    #         else:
+    #             return
+    #     except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
+    #         return
         
-        self.wand_brightness = min(max(round(results["best_params"]["brightness"]), -100), 100)
-        self.wand_contrast = min(max(round(results["best_params"]["contrast"]), -100), 100)
-        self.wand_gamma = min(max(round(results["best_params"]["shadows"]), -100), 100)
-        self.wand_threshold = min(max(round(results["best_params"]["threshold"]), 0.0), 1.0)
-        self.wand_edge_tolerance = min(max(round(results["best_params"]["grad_edge"]), 0.0), 1.0)
+    #     self.set_status("loading", "Optimizing parameters...")
+    #     results = BO.optimize(mask_label=self.active_mask_id,
+    #                           initial_points=self.slimtag_config["bayesian_optimization"]["initial_points"],
+    #                           maxiter=self.slimtag_config["bayesian_optimization"]["max_iterations"],
+    #                           n_points=self.slimtag_config["bayesian_optimization"]["n_points"]
+    #                           )
         
-        self.wand_brightness_lbl.configure(text=str(self.wand_brightness))
-        self.wand_contrast_lbl.configure(text=str(self.wand_contrast))
-        self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
-        self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
-        self.wand_threshold_slider.set(self.wand_threshold)
-        if self.wand_model_menu.get() == "Region growing":
-            self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
-            self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+    #     self.wand_brightness = min(max(round(results["best_params"]["brightness"]), -100), 100)
+    #     self.wand_contrast = min(max(round(results["best_params"]["contrast"]), -100), 100)
+    #     self.wand_gamma = min(max(round(results["best_params"]["shadows"]), -100), 100)
+    #     self.wand_threshold = min(max(results["best_params"]["threshold"], 0.0), 1.0)
+    #     self.wand_edge_tolerance = min(max(results["best_params"]["grad_edge"], 0.0), 1.0)
         
-        self.set_status("ready", "Ready")
+    #     self.wand_brightness_lbl.configure(text=str(self.wand_brightness))
+    #     self.wand_contrast_lbl.configure(text=str(self.wand_contrast))
+    #     self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
+    #     self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
+    #     self.wand_threshold_slider.set(self.wand_threshold)
+    #     if self.wand_model_menu.get() == "Region growing":
+    #         self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
+    #         self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+        
+    #     self.set_status("ready", "Ready")
         
 #%% Main cycle
 if __name__ == "__main__":

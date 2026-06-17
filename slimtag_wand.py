@@ -176,7 +176,7 @@ def sam_inference(image, point, parameters, # model_inference mandatory args
                   pt_labels=np.array([1]), multipoint=False): # sam_inference kwargs
     # default values if parameters does not contain those
     thres = parameters.get("threshold", 0.5)
-    masks, scores, _ = model.predict(np.array([point]),
+    masks, scores, _ = model.predict(np.array(point),
                                      pt_labels,
                                      multimask_output=not multipoint,
                                      return_logits=True)
