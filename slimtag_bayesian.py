@@ -228,7 +228,7 @@ class OptimizerDialog(ctk.CTkToplevel):
 
         self.parent = parent # assumed to be SegmentationApp()
         self.on_close = on_close # possible function of parent to be executed at self closure
-
+        
         self.title("SLImTAG")
         self.geometry("600x300")
         self.resizable(False, False)
@@ -268,6 +268,11 @@ class OptimizerDialog(ctk.CTkToplevel):
         for fd in ["images", "masks"]:
             self._set_anchor_label(fd)
         self.show_frame(self.initial_frame)
+        
+        self.update_idletasks()
+        self.transient(parent)
+        self.grab_set()
+        self.after(100, self.focus_set)
     
     def show_frame(self, frame):
         frame.tkraise()
