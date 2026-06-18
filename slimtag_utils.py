@@ -828,14 +828,13 @@ class SplashScreen(tk.Toplevel):
         self.progress.pack(pady=8)
         self._set(0)
     
-    def get_monitor_from_window(self,root):
-        """Restituisce il monitor su cui si trova la finestra di Tkinter."""
-        # Ottieni la posizione attuale della finestra
+    def get_monitor_from_window(self, root):
+        """Return the monitor where root tkinter window lives."""
+        # get current window (absolute) position
         x = root.winfo_x()
         y = root.winfo_y()
         
-        # Se la finestra non è ancora stata visualizzata (x,y = 0), 
-        # puoi usare la posizione del mouse come alternativa
+        # if the window hasn't been drawn yet, use mouse current position
         if x < 0 and y < 0:
             x = root.winfo_pointerx()
             y = root.winfo_pointery()
@@ -844,7 +843,8 @@ class SplashScreen(tk.Toplevel):
             if (monitor.x <= x < monitor.x + monitor.width and
                 monitor.y <= y < monitor.y + monitor.height):
                 return monitor
-        return get_monitors()[0]  # Fallback al monitor principale 
+            
+        return get_monitors()[0]  # fallback to main monitor
 
     def step(self, value):
         value = value / 100
