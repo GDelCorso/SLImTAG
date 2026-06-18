@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
+from screeninfo import get_monitors
 
 from PIL import Image, ImageDraw, ImageTk
 import os
@@ -806,25 +807,44 @@ class Tooltip():
         self.tw = None
 
 class SplashScreen(tk.Toplevel):
-    def __init__(self):
+    def __init__(self, root):
         super().__init__()
         self.overrideredirect(True)
         self.title("Loading...")
         self.configure(bg="black")
         
+        current_monitor = self.get_monitor_from_window(root)
+
         logo_size = 394
         splash_height = logo_size + 32
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        x = (screen_width // 2) - (logo_size // 2)
-        y = (screen_height // 2) - (splash_height // 2)
+        screen_width = current_monitor.width
+        screen_height = current_monitor.height
+        x = (screen_width // 2) - (logo_size // 2) + current_monitor.x
+        y = (screen_height // 2) - (splash_height // 2) + current_monitor.y
         self.geometry(f"{logo_size}x{splash_height}+{x}+{y}")
         my_image = ctk.CTkImage(dark_image=Image.open(os.path.join("images", "logo.png")), size=(logo_size,logo_size))
         ctk.CTkLabel(self, text="Loading...", image=my_image).pack()
         self.progress = ctk.CTkProgressBar(self, width=logo_size-32, height=16, progress_color="red", fg_color="#101010")
         self.progress.pack(pady=8)
         self._set(0)
+    
+    def get_monitor_from_window(self,root):
+        """Restituisce il monitor su cui si trova la finestra di Tkinter."""
+        # Ottieni la posizione attuale della finestra
+        x = root.winfo_x()
+        y = root.winfo_y()
         
+        # Se la finestra non è ancora stata visualizzata (x,y = 0), 
+        # puoi usare la posizione del mouse come alternativa
+        if x < 0 and y < 0:
+            x = root.winfo_pointerx()
+            y = root.winfo_pointery()
+
+        for monitor in get_monitors():
+            if (monitor.x <= x < monitor.x + monitor.width and
+                monitor.y <= y < monitor.y + monitor.height):
+                return monitor
+        return get_monitors()[0]  # Fallback al monitor principale 
 
     def step(self, value):
         value = value / 100

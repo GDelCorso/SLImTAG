@@ -94,13 +94,14 @@ class SegmentationApp(ctk.CTk):
         ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
 
         # hide main window and open splash screen
-        self.withdraw()
-        splash = SplashScreen()
-
+        
         self.title("SLImTAG")
         self.geometry("1300x900")
         self.iconphoto(False, ImageTk.PhotoImage(file=os.path.join("images", "main_icon.png")))
-        
+        self.update_idletasks()
+        self.withdraw()
+        splash = SplashScreen(self)
+
         # TODO move set_appearance_mode to preferences window
         # optionsmenu "dark", "light" with default value: "dark"
         
