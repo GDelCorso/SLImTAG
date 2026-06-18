@@ -346,19 +346,38 @@ class OptimizerDialog(ctk.CTkToplevel):
         
         results_frame = ctk.CTkFrame(frame, fg_color="transparent")
         results_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        results_frame.grid_rowconfigure(0, weight=1)
+        results_frame.grid_columnconfigure(0, weight=1)
+        
+        inner_res_frame = ctk.CTkFrame(results_frame, fg_color="transparent")
+        inner_res_frame.grid(row=0, column=0, padx=0, pady=0)
+        
+        ctk.CTkLabel(inner_res_frame, text="PARAMETER", anchor="w").grid(row=0, column=0, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text="OLD").grid(row=0, column=1, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text="NEW", font=ctk.CTkFont(weight="bold")).grid(row=0, column=2, sticky="ew", padx=10)
         
         self.results_lbl = {}
-        self.results_lbl["brightness"] = ctk.CTkLabel(results_frame, text="Brightness: ")
-        self.results_lbl["brightness"].grid(row=0, column=0, sticky="ew")
-        self.results_lbl["contrast"] = ctk.CTkLabel(results_frame, text="Contrast: ")
-        self.results_lbl["contrast"].grid(row=1, column=0, sticky="ew")
-        self.results_lbl["shadows"] = ctk.CTkLabel(results_frame, text="Shadows: ")
-        self.results_lbl["shadows"].grid(row=2, column=0, sticky="ew")
-        self.results_lbl["threshold"] = ctk.CTkLabel(results_frame, text="Wand threshold: ")
-        self.results_lbl["threshold"].grid(row=3, column=0, sticky="ew")
-        self.results_lbl["grad_edge"] = ctk.CTkLabel(results_frame, text="Edge tolerance: ")
+        ctk.CTkLabel(inner_res_frame, text="Brightness", anchor="w").grid(row=1, column=0, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text=f"{self.parent.wand_brightness}").grid(row=1, column=1, sticky="ew", padx=10)
+        self.results_lbl["brightness"] = ctk.CTkLabel(inner_res_frame, text="0", font=ctk.CTkFont(weight="bold"))
+        self.results_lbl["brightness"].grid(row=1, column=2, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text="Contrast", anchor="w").grid(row=2, column=0, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text=f"{self.parent.wand_contrast}").grid(row=2, column=1, sticky="ew", padx=10)
+        self.results_lbl["contrast"] = ctk.CTkLabel(inner_res_frame, text="0", font=ctk.CTkFont(weight="bold"))
+        self.results_lbl["contrast"].grid(row=2, column=2, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text="Shadows", anchor="w").grid(row=3, column=0, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text=f"{self.parent.wand_gamma}").grid(row=3, column=1, sticky="ew", padx=10)
+        self.results_lbl["shadows"] = ctk.CTkLabel(inner_res_frame, text="0", font=ctk.CTkFont(weight="bold"))
+        self.results_lbl["shadows"].grid(row=3, column=2, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text="Wand threshold", anchor="w").grid(row=4, column=0, sticky="ew", padx=10)
+        ctk.CTkLabel(inner_res_frame, text=f"{self.parent.wand_threshold:.2f}").grid(row=4, column=1, sticky="ew", padx=10)
+        self.results_lbl["threshold"] = ctk.CTkLabel(inner_res_frame, text="0", font=ctk.CTkFont(weight="bold"))
+        self.results_lbl["threshold"].grid(row=4, column=2, sticky="ew", padx=10)
+        self.results_lbl["grad_edge"] = ctk.CTkLabel(inner_res_frame, text="0", font=ctk.CTkFont(weight="bold"))
         if self.parent.wand_model_menu.get() == "Region growing":
-            self.results_lbl["grad_edge"].grid(row=4, column=0, sticky="ew")
+            ctk.CTkLabel(inner_res_frame, text="Edge tolerance", anchor="w").grid(row=5, column=0, sticky="ew", padx=10)
+            ctk.CTkLabel(inner_res_frame, text=f"{self.parent.wand_edge_tolerance:.2f}").grid(row=5, column=1, sticky="ew", padx=10)
+            self.results_lbl["grad_edge"].grid(row=5, column=2, sticky="ew", padx=10)
         
         buttons_frame = ctk.CTkFrame(frame, fg_color="transparent")
         buttons_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
@@ -485,9 +504,9 @@ class OptimizerDialog(ctk.CTkToplevel):
     def end_optimization(self):
         self.wheel_running = False
         for res in ["brightness", "contrast", "shadows"]:
-            self.results_lbl[res].configure(text=f"{self.results_lbl[res].cget('text')}{self.new_params[res]}")
+            self.results_lbl[res].configure(text=f"{self.new_params[res]}")
         for res in ["threshold", "grad_edge"]:
-            self.results_lbl[res].configure(text=f"{self.results_lbl[res].cget('text')}{self.new_params[res]:.2f}")
+            self.results_lbl[res].configure(text=f"{self.new_params[res]:.2f}")
         self.show_frame(self.results_frame)
 
     def apply(self):
