@@ -223,11 +223,10 @@ class OptimizerDialog(ctk.CTkToplevel):
     """
     Class for dialog window for BayesianOptimization interaction from main app
     """
-    def __init__(self, parent, on_close=None):
+    def __init__(self, parent):
         super().__init__(parent)
 
         self.parent = parent # assumed to be SegmentationApp()
-        self.on_close = on_close # possible function of parent to be executed at self closure
         
         self.title("SLImTAG")
         self.geometry("600x300")
