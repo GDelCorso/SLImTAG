@@ -533,8 +533,6 @@ class OptimizerDialog(ctk.CTkToplevel):
     def close(self):
         if self.computation_done:
             self.parent.async_loader()
-        if self.on_close is not None:
-            self.on_close()
         self.destroy()
     
 #### Auxiliary functions
