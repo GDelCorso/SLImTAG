@@ -24,7 +24,6 @@ import math
 # Numerical arrays manipulation
 import numpy as np
 from scipy import ndimage # for region operations (growing, dilation, erosion, fill holes)
-from scipy.special import expit # sigmoid
 
 # TkInter and CustomTkInter GUI
 import tkinter as tk
@@ -48,8 +47,8 @@ from slimtag_utils import MultiButtonDialog, MaskEditDialog
 from slimtag_utils import PreprocessingAdjustments, adjust_image
 from slimtag_utils import Tooltip
 from slimtag_color_utils import rgb_to_hex, hex_to_rgb
-from slimtag_bayesian import BayesianOptimization
-from slimtag_bayesian import region_growing_model_inference, region_growing_preprocessing # TODO remove and reimplement from main file
+from slimtag_bayesian import OptimizerDialog
+import slimtag_wand as wand
 
 # Asynchronous threading import
 import threading
@@ -304,6 +303,8 @@ class SegmentationApp(ctk.CTk):
         # Region growing edge tolerance
         self.wand_edge_tolerance = 0.5
         
+        self.region_growing_preprocess = None
+        
         # boolean to track if buttons are pressed
         self.b3_pressed = False # right mouse button
         self.mid_pressed = False # middle mouse button
@@ -444,32 +445,32 @@ class SegmentationApp(ctk.CTk):
         
         #%% Left panel: Tools
         # Frame for main menu
-        self.main_menu_frame = ctk.CTkFrame(self.left_panel, corner_radius=0)
-        self.main_menu_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=(0, 5))
+        # self.main_menu_frame = ctk.CTkFrame(self.left_panel, corner_radius=0)
+        # self.main_menu_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=(0, 5))
         
-        # label created as fake button for consistency reasons
-        self.main_menu_label = ctk.CTkButton(self.main_menu_frame,
-                                             width=44, height=44,
-                                             text="",
-                                             fg_color="transparent",
-                                             border_width=0,
-                                             hover=False,
-                                             state="disabled",
-                                             command=None)
-        self.main_menu_label.grid(row=0, column=0, sticky="nsew", padx=(4, 2), pady=4)
-        # actual main menu
-        self.main_menu_btn = ctk.CTkButton(self.main_menu_frame,
-                                           width=44, height=44,
-                                           text="", image=self.icons_dict["MenuIcon"],
-                                           fg_color="transparent",
-                                           command=None)
-        self.main_menu_btn.grid(row=0, column=1, sticky="nsew", padx=(2, 4), pady=4)
+        # # label created as fake button for consistency reasons
+        # self.main_menu_label = ctk.CTkButton(self.main_menu_frame,
+        #                                      width=44, height=44,
+        #                                      text="",
+        #                                      fg_color="transparent",
+        #                                      border_width=0,
+        #                                      hover=False,
+        #                                      state="disabled",
+        #                                      command=None)
+        # self.main_menu_label.grid(row=0, column=0, sticky="nsew", padx=(4, 2), pady=4)
+        # # actual main menu
+        # self.main_menu_btn = ctk.CTkButton(self.main_menu_frame,
+        #                                    width=44, height=44,
+        #                                    text="", image=self.icons_dict["MenuIcon"],
+        #                                    fg_color="transparent",
+        #                                    command=None)
+        # self.main_menu_btn.grid(row=0, column=1, sticky="nsew", padx=(2, 4), pady=4)
         
         # Frames for buttons
         self.tools_btn_frame = {i: ctk.CTkFrame(self.left_panel, corner_radius=0) for i in range(5)}
-        frame_paddings = 4*[5] + [(5, 0)]
+        frame_paddings = [(0, 5)] + 3*[5] + [(5, 0)]
         for i in range(5):
-            self.tools_btn_frame[i].grid(row=i+1, column=0, sticky="nsew", padx=0, pady=frame_paddings[i])
+            self.tools_btn_frame[i].grid(row=i, column=0, sticky="nsew", padx=0, pady=frame_paddings[i])
         
         # Buttons
         # TODO all commands, in particular add the "right-click" that are a different tool now
@@ -889,24 +890,13 @@ class SegmentationApp(ctk.CTk):
             # apply adjustments to magic wand pre-computation
             image = adjust_image(np.array(self.image_orig), self.wand_brightness, self.wand_contrast, self.wand_gamma)
             
-            # REGION GROWING (need 0-255 matrices BUT with float dtype)
-            # grayscale: mimic PIL's convert("L"), which uses the ITU-R 601-2 luma transform
-            self.region_growing_gray = (0.299*image[..., 0] + 0.587*image[..., 1] + 0.114*image[..., 2]).astype(np.float32)
-            # RGB: just cast to expected dtype
-            self.region_growing_rgb = image.astype(np.float32)
-            # edge detection (computed on grayscale)
-            gx = ndimage.sobel(self.region_growing_gray, axis=1)
-            gy = ndimage.sobel(self.region_growing_gray, axis=0)
-            self.region_growing_grad = np.hypot(gx, gy)
-            # normalize gradient matrix to [0,1] for stability
-            #self.region_growing_grad = self.region_growing_grad / (self.region_growing_grad.max() + 1e-8)
-            p = np.percentile(self.region_growing_grad, 99)
-            self.region_growing_grad = np.clip(self.region_growing_grad / (p + 1e-8), 0, 1)
+            # compute preprocessing for region growing
+            self.region_growing_preprocess = wand.region_growing_preprocessing(image)
             
             # SAM computation
             if self.slimtag_config["modules"]["sam"]:
                 if self.sam is not None:
-                    self.sam.set_image(image)
+                    wand.sam_preprocessing(image, self.sam)
             
             # Turn on switch
             self.switch_computed_magic_wand = True
@@ -947,16 +937,16 @@ class SegmentationApp(ctk.CTk):
             self.wand_edge_tolerance_slider.configure(state="normal",
                                                       button_color=ctk.ThemeManager.theme["CTkSlider"]["button_color"]
                                                       )
-            self.wand_auto_update.configure(state="normal",
-                                            image=self.icons_dict["AutoUpdate"]["normal"]
-                                            )
+            # self.wand_auto_update.configure(state="normal",
+            #                                 image=self.icons_dict["AutoUpdate"]["normal"]
+            #                                 )
         elif model_type in self.available_sam_models:
             self.wand_threshold = 0.5
             self.wand_edge_tolerance_slider.configure(state="disabled",
                                                       button_color=["gray60", "gray45"]
                                                       )
-            self.wand_auto_update.configure(state="disabled",
-                                            image=self.icons_dict["AutoUpdate"]["disabled"])
+            # self.wand_auto_update.configure(state="disabled",
+            #                                 image=self.icons_dict["AutoUpdate"]["disabled"])
             if model_type != self.last_sam_model:
                 self.last_sam_model = model_type
                 self.sam_loader(model_type)
@@ -1120,7 +1110,7 @@ class SegmentationApp(ctk.CTk):
             else: # state == False
                 self.modified = False
             self.update_title()
-
+    
     #%% APPEARANCE (DARK/LIGHT)
     def toggle_appearance(self):
         ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
@@ -1159,8 +1149,6 @@ class SegmentationApp(ctk.CTk):
         w = int(self.view_w / self.preview_scale)
         h = int(self.view_h / self.preview_scale)
         self.current_preview_canvas.create_rectangle(x, y, x+w, y+h, outline=HIGHLIGHT_COLOR, width=2, tag="rectangle")
-        
-                
     
     #%% UPDATE DISPLAY
     def update_display(self, update_image=True, update_blended=True):
@@ -1306,9 +1294,7 @@ class SegmentationApp(ctk.CTk):
                 overlay_prev[self.sam_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
                 blended = Image.alpha_composite(blended, Image.fromarray(overlay_prev))
         self.blended = blended.convert("RGB")
-        # if self.tool_active["brush"]:
-        #     self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
-
+    
     def display_blended(self):
         """
         Show precomputed preview during pan & zoom events
@@ -1634,10 +1620,7 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig = self.undo_stack.pop()
             self.update_lock()
             self.update_display(update_image=False)
-            # if self.tool_active["brush"]:
-            #     self._draw_brush_preview(self.mouse['x'], self.mouse['y'])
-
-
+    
     #%% MASK MANAGEMENT
     def add_mask(self, name=None):
         '''
@@ -1981,7 +1964,7 @@ class SegmentationApp(ctk.CTk):
         # reset masks
         self.clear_all_masks()
         
-        img = Image.open(p).convert("RGBA").convert("RGB")
+        img = Image.open(p).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
         
         self.load_image(img, change_canvas="default")
         
@@ -2444,21 +2427,27 @@ class SegmentationApp(ctk.CTk):
             self.connected_component_click(e, remove_only=(self.tool_active["cut"] and not shift_pressed))
             return
         
-        if (self.tool_active["fill"]) and check_inside_image:
+        if self.tool_active["fill"] and check_inside_image:
             self.fill_connected_component(e)
             return
         
-        if self.tool_active["wand"] and check_inside_image:
+        if self.tool_active["wand"] and check_inside_image: # TODO implement with match
             if self.wand_model_menu.get() == "Region growing":
-                self.region_growing(e, tolerance = self.wand_threshold, max_grad_edge=self.wand_edge_tolerance)
+                self.region_growing(e)
             elif self.wand_model_menu.get() in self.available_sam_models:
                 self.sam_add_point(e, add=not shift_pressed, multipoint=ctrl_pressed)
             else:
                 return
             return
         
-        if self.tool_active["wand_multi"] and check_inside_image:
-            self.sam_add_point(e, add=not shift_pressed, multipoint=True)
+        if self.tool_active["wand_multi"] and check_inside_image: # TODO implement with match
+            if self.wand_model_menu.get() == "Region growing":
+                MultiButtonDialog(self, message="Multipoint magic wand currently implemented for SAM models only", buttons=[("OK", None)])
+                return
+            elif self.wand_model_menu.get() in self.available_sam_models:
+                self.sam_add_point(e, add=not shift_pressed, multipoint=True)
+            else:
+                return
             return
         
         if (self.tool_active["brush"] or self.tool_active["eraser"]) and check_inside_image:
@@ -2477,7 +2466,7 @@ class SegmentationApp(ctk.CTk):
    
     def on_canvas_mid_release(self, e):
         self.mid_pressed = False
-        self._pan_start = None 
+        self._pan_start = None
         self.update_display(update_image=True)
         self.draw_brush_preview(e)
 
@@ -2496,25 +2485,24 @@ class SegmentationApp(ctk.CTk):
         '''
         self.b3_pressed = True
         self.on_canvas_left(e)
-        return;
 
     def on_canvas_right_release(self, e):
         self.b3_pressed = False
         self.on_canvas_left_release(e)
 
     def on_canvas_drag(self, e):
-        if self.image_orig is None:
-            return
         '''
         Updates the brush continuously while dragging the mouse.
         Draws one circle per event, using add/subtract depending on Shift.
         No interpolation between points to avoid undesired smoothing.
         '''
+        if self.image_orig is None:
+            return
+        
         shift_pressed = (e.state & 0x0001) != 0 or self.b3_pressed
         
         # Move the canvas if not tools selected
         if not any(self.tool_active[tool] for tool in self.tool_active) or self.mid_pressed:
-            
             if self._pan_start is not None:
                 x0, y0, ox0, oy0 = self._pan_start
                 self.view_x = ox0 -int((e.x - x0)*(self.view_w/self.canvas.winfo_width()))
@@ -2528,7 +2516,6 @@ class SegmentationApp(ctk.CTk):
         if not (self.tool_active["brush"] or self.tool_active["eraser"]):
             return
         
-
         # Define the brush drag
         x1 = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y1 = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
@@ -2665,9 +2652,7 @@ class SegmentationApp(ctk.CTk):
         self.view_y += dy
         self.update_display(update_image=True)
         self.update_preview_frame()
-
-
-
+    
     def zoom_evt(self, e):
         '''
         Adjusts the zoom level of the displayed image based on mouse wheel 
@@ -2899,7 +2884,6 @@ class SegmentationApp(ctk.CTk):
         outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
         dash = (5,10) if (shift_pressed or self.tool_active["eraser"]) else None
 
-
         match self.brush_shape:
             case 'Circle':
                 self.canvas.create_oval(x-r, y-r, x+r, y+r, fill="", outline=outline_color, dash=dash, width=2, tag="brush")
@@ -2967,15 +2951,15 @@ class SegmentationApp(ctk.CTk):
         if (self.image_orig is None) or (self.active_mask_id is None) or (not self.sam_points):
             return
         self.set_status("loading", "SAM computing...")
-            
-        masks, scores, _ = self.sam.predict(np.array(self.sam_points),
-                                            np.array(self.sam_pt_labels),
-                                            multimask_output=not multipoint,
-                                            return_logits=True)
-
-        masks = expit(masks) > self.wand_threshold
-        i = np.argmax(scores)
-        self.sam_preview[masks[i] & (~self.mask_locked)] = True
+        
+        # image = None, since preprocessing embedded image in model
+        mask = wand.sam_inference(None,
+                                  point=np.array(self.sam_points),
+                                  pt_labels=np.array(self.sam_pt_labels),
+                                  parameters={"threshold": self.wand_threshold},
+                                  model=self.sam,
+                                  multipoint=multipoint)
+        self.sam_preview[mask & (~self.mask_locked)] = True
         
         if multipoint: # to show preview
             self.update_display(update_image=False)
@@ -3031,46 +3015,8 @@ class SegmentationApp(ctk.CTk):
              
     # NON-NEURAL METHODS
     # SCIPY REGION GROWING
-    def region_growing(self, e, tolerance=0.15, switch_robust_estimator=True, 
-                       switch_RGB=True, use_edges=True, max_grad_edge=0.5, 
-                       switch_erosion=False, switch_fill_hole=True, 
-                       max_hole_size=100):
-        """
-        Interactive region growing segmentation with optional RGB/grayscale similarity,
-        robust seed estimation, edge-aware filtering, morphological cleanup, and
-        selective hole filling.
-        
-        Parameters
-        ----------
-        e : event
-            Mouse click event (canvas coordinates).
-        
-        tolerance : float (0–1)
-            Similarity threshold for region growing (0 = strict, 1 = permissive).
-        
-        switch_robust_estimator : bool
-            Uses 3×3 trimmed mean seed estimation to reduce noise sensitivity.
-        
-        switch_RGB : bool
-            If True uses RGB Euclidean distance, otherwise grayscale intensity.
-        
-        use_edges : bool
-            Adds gradient-based edge stopping constraint.
-        
-        max_grad_edge : float (0–1)
-            Maximum normalized gradient allowed for region growing (lower = stricter).
-        
-        switch_erosion : bool
-            Applies morphological opening to break thin connections before labeling.
-        
-        switch_fill_hole : bool
-            Enables selective filling of small internal holes.
-        
-        max_hole_size : int
-            Maximum pixel area of holes to fill.
-        """
-        
-        
+    def region_growing(self, e):
+
         if self.image_orig is None or self.active_mask_id is None:
             return
         
@@ -3080,82 +3026,10 @@ class SegmentationApp(ctk.CTk):
         x = int((e.x) * (self.view_w / self.canvas.winfo_width())) + self.view_x
         y = int((e.y) * (self.view_h / self.canvas.winfo_height())) + self.view_y
         
-        # Select the seed value
-        if switch_robust_estimator:
-            # trimmed robust local estimator
-            if switch_RGB:
-                patch_rgb = self.region_growing_rgb[
-                    max(0, y-1):min(self.region_growing_rgb.shape[0], y+2),
-                    max(0, x-1):min(self.region_growing_rgb.shape[1], x+2)
-                ]
-                vals_rgb = patch_rgb.reshape(-1, 3)
-                med_rgb = np.median(vals_rgb, axis=0)
-                dist_rgb = np.sum((vals_rgb - med_rgb)**2, axis=1)
-                keep_idx_rgb = np.argsort(dist_rgb)[:5]
-                seed_val_rgb = vals_rgb[keep_idx_rgb].mean(axis=0)
-            else: # grayscale
-                patch_gray = self.region_growing_gray[
-                    max(0, y-1):min(self.region_growing_gray.shape[0], y+2),
-                    max(0, x-1):min(self.region_growing_gray.shape[1], x+2)
-                ].astype(np.float32)
-                vals_gray = patch_gray.flatten()
-                med_gray = np.median(vals_gray)
-                dist_gray = np.abs(vals_gray - med_gray)
-                keep_idx = np.argsort(dist_gray)[:5]
-                seed_val_gray = vals_gray[keep_idx].mean()
-        else:
-            # pixel-perfect estimator
-            seed_val_gray = self.region_growing_gray[y, x]
-            seed_val_rgb = self.region_growing_rgb[y, x]
-        
-        # Compute similarity score
-        if switch_RGB:
-            rgb = self.region_growing_rgb
-            dr = rgb[..., 0] - seed_val_rgb[0]
-            dg = rgb[..., 1] - seed_val_rgb[1]
-            db = rgb[..., 2] - seed_val_rgb[2]
-            diff = np.sqrt(dr*dr + dg*dg + db*db)
-        else: # grayscale
-            diff = np.abs(self.region_growing_gray - seed_val_gray) # in FLOAT 32
-        
-        # apply region growing
-        mask = diff < round(255 * tolerance)
-        
-        # post-processing: integrate edge information
-        if use_edges:
-            # integrates edges by removing all area with grad greater thatn max_grad_edge
-            mask = mask & (self.region_growing_grad < max_grad_edge)
-        
-        # post-processing: small erosion+dilation to break small connections between zones
-        if switch_erosion:
-            mask = ndimage.binary_opening(mask, structure=np.ones((3, 3)))
+        params = {"threshold": self.wand_threshold, "grad_edge": self.wand_edge_tolerance}
             
-        # extraction of single connected component
-        labeled, _ = ndimage.label(mask)
-        seed_label = labeled[y, x]
-        if seed_label == 0:
-            self.set_status("ready", "Ready")
-            return
-        region = (labeled == seed_label)
-        
-        # post-processing: fill small holes
-        if switch_fill_hole:
-            # holes = internal background of the region
-            holes = ndimage.binary_fill_holes(region) & (~region)
-            # label holes
-            hole_labels, _ = ndimage.label(holes)
-            # compute hole sizes
-            hole_sizes = np.bincount(hole_labels.ravel())
-            # keep only small holes
-            small_idx = np.where(hole_sizes <= max_hole_size)[0]
-            small_idx = small_idx[small_idx!=0]
-            # skip label 0 (not-holes) in the remote case that it is small too
-            small_holes = np.isin(
-                hole_labels,
-                small_idx
-            )
-            # fill only small holes
-            region = region | small_holes
+        # image = None, since all the info needed is in preprocessing
+        region = wand.region_growing_inference(None, [x, y], parameters=params, preprocessing=self.region_growing_preprocess)
         
         # update history, apply to mask and update display
         self.push_undo()
@@ -3307,49 +3181,64 @@ class SegmentationApp(ctk.CTk):
         self.mask_locked[self.mask_orig==0] = False
         self.update_display(update_image=False)
         self.set_status("ready", "Ready")
-
+    
     #%% BAYESIAN OPTIMIZATION
-    def wand_update_bayesian(self): # TODO clean and adapt to SAM
-        """
-        Use Bayesian optimization to update magic wand parameters
-        """
-        path_directory =  filedialog.askdirectory()
-        if not path_directory:
+    def wand_update_bayesian(self):
+        if not self.mask_labels:
             return
+        OptimizerDialog(self)
+    
+    # def wand_update_bayesian(self):
+    #     """
+    #     Use Bayesian optimization to update magic wand parameters
+    #     """
         
-        if self.active_mask_id is None:
-            return
+    #     path_directory =  filedialog.askdirectory()
+    #     if not path_directory:
+    #         return
         
-        try:
-            BO = BayesianOptimization(path_directory,
-                                      model_inference=region_growing_model_inference,
-                                      model_preprocessing=region_growing_preprocessing
-                                      )
-        except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
-            return
+    #     if self.active_mask_id is None:
+    #         return
         
-        self.set_status("loading", "Optimizing parameters...")
-        results = BO.optimize(mask_label=self.active_mask_id,
-                              initial_points=self.slimtag_config["bayesian_optimization"]["initial_points"],
-                              maxiter=self.slimtag_config["bayesian_optimization"]["max_iterations"],
-                              n_points=self.slimtag_config["bayesian_optimization"]["n_points"]
-                              )
+    #     try:
+    #         if self.wand_model_menu.get() == "Region growing":
+    #             BO = BayesianOptimization(path_directory,
+    #                                       model_inference=wand.region_growing_inference,
+    #                                       model_preprocessing=wand.region_growing_preprocessing
+    #                                       )
+    #         elif self.wand_model_menu.get() in self.available_sam_models:
+    #             BO = BayesianOptimization(path_directory,
+    #                                       model_inference=lambda img, pt, parameters, preprocessing=None: wand.sam_inference(img, [pt], parameters, model=self.sam, preprocessing=preprocessing),
+    #                                       model_preprocessing=lambda img: wand.sam_preprocessing(img, self.sam)
+    #                                       )
+    #         else:
+    #             return
+    #     except RuntimeError: # raised if path_directory does not contain valid images/masks pairs
+    #         return
         
-        self.wand_brightness = min(max(round(results["best_params"]["brightness"]), -100), 100)
-        self.wand_contrast = min(max(round(results["best_params"]["contrast"]), -100), 100)
-        self.wand_gamma = min(max(round(results["best_params"]["shadows"]), -100), 100)
-        self.wand_threshold = min(max(round(results["best_params"]["threshold"]), 0.0), 1.0)
-        self.wand_edge_tolerance = min(max(round(results["best_params"]["grad_edge"]), 0.0), 1.0)
+    #     self.set_status("loading", "Optimizing parameters...")
+    #     results = BO.optimize(mask_label=self.active_mask_id,
+    #                           initial_points=self.slimtag_config["bayesian_optimization"]["initial_points"],
+    #                           maxiter=self.slimtag_config["bayesian_optimization"]["max_iterations"],
+    #                           n_points=self.slimtag_config["bayesian_optimization"]["n_points"]
+    #                           )
         
-        self.wand_brightness_lbl.configure(text=str(self.wand_brightness))
-        self.wand_contrast_lbl.configure(text=str(self.wand_contrast))
-        self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
-        self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
-        self.wand_threshold_slider.set(self.wand_threshold)
-        self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
-        self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+    #     self.wand_brightness = min(max(round(results["best_params"]["brightness"]), -100), 100)
+    #     self.wand_contrast = min(max(round(results["best_params"]["contrast"]), -100), 100)
+    #     self.wand_gamma = min(max(round(results["best_params"]["shadows"]), -100), 100)
+    #     self.wand_threshold = min(max(results["best_params"]["threshold"], 0.0), 1.0)
+    #     self.wand_edge_tolerance = min(max(results["best_params"]["grad_edge"], 0.0), 1.0)
         
-        self.set_status("ready", "Ready")
+    #     self.wand_brightness_lbl.configure(text=str(self.wand_brightness))
+    #     self.wand_contrast_lbl.configure(text=str(self.wand_contrast))
+    #     self.wand_gamma_lbl.configure(text=str(self.wand_gamma))
+    #     self.wand_threshold_lbl.configure(text=f"{self.wand_threshold:.2f}")
+    #     self.wand_threshold_slider.set(self.wand_threshold)
+    #     if self.wand_model_menu.get() == "Region growing":
+    #         self.wand_edge_tolerance_lbl.configure(text=f"{self.wand_edge_tolerance:.2f}")
+    #         self.wand_edge_tolerance_slider.set(self.wand_edge_tolerance)
+        
+    #     self.set_status("ready", "Ready")
         
 #%% Main cycle
 if __name__ == "__main__":

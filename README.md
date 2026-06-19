@@ -9,7 +9,7 @@ However, the current version is a fully functioning interface with a novel graph
 Particular focus on:
 - [x] Integrate non-neural methods [Gdc]
 - [x] Integrate existing *load* nrrd, nifti, etc. modules [Gdc]
-- [ ] Upload (already tested) Bayesian module [Gdc]
+- [x] Upload (already tested) Bayesian module [Gdc]
 - [ ] Change existing 3D visualization to ease the read on biomedical settings [Op]
 - [x] Tooltip hover [Op]
 - [x] Preview multipoint improvement [Op]
@@ -239,7 +239,7 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 
 #### Brush
 
-- [ ] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
+- [x] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
 
 #### Magic wand
 
@@ -251,8 +251,9 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 - [ ] TO CONSIDER: in smoothing tool, add toggle for locking mask at image border and/or other masks border, so that it is not erased (useful e.g. if mask is background)
 
 ### Potential additional features
-- [ ] Different brush shapes (square)
+- [x] Different brush shapes (square)
 - [ ] Rectangle/polygonal "add to mask" tool
+- [ ] For polygonal mask: add points at left click, Enter confirm + Esc cancel, preview (like multipoint wand ― actually use the same preview layer to display preview mask); add switch for smooth (e.g. Bézier) curves between points, click near endpoint to close path, next click depends on: if path is open, add next point; if path is closed, add new point between the two consecutive points that minimize sum of distances between them and new point
 - [ ] (WIP) Define plugins for different features to mantain the system lightweight and make it adaptable to user experience
 - [ ] Add button "invert mask"
 - [ ] Add "save png with mask as alpha channel"
