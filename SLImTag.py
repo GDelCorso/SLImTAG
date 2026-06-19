@@ -440,32 +440,32 @@ class SegmentationApp(ctk.CTk):
         
         #%% Left panel: Tools
         # Frame for main menu
-        self.main_menu_frame = ctk.CTkFrame(self.left_panel, corner_radius=0)
-        self.main_menu_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=(0, 5))
+        # self.main_menu_frame = ctk.CTkFrame(self.left_panel, corner_radius=0)
+        # self.main_menu_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=(0, 5))
         
-        # label created as fake button for consistency reasons
-        self.main_menu_label = ctk.CTkButton(self.main_menu_frame,
-                                             width=44, height=44,
-                                             text="",
-                                             fg_color="transparent",
-                                             border_width=0,
-                                             hover=False,
-                                             state="disabled",
-                                             command=None)
-        self.main_menu_label.grid(row=0, column=0, sticky="nsew", padx=(4, 2), pady=4)
-        # actual main menu
-        self.main_menu_btn = ctk.CTkButton(self.main_menu_frame,
-                                           width=44, height=44,
-                                           text="", image=self.icons_dict["MenuIcon"],
-                                           fg_color="transparent",
-                                           command=None)
-        self.main_menu_btn.grid(row=0, column=1, sticky="nsew", padx=(2, 4), pady=4)
+        # # label created as fake button for consistency reasons
+        # self.main_menu_label = ctk.CTkButton(self.main_menu_frame,
+        #                                      width=44, height=44,
+        #                                      text="",
+        #                                      fg_color="transparent",
+        #                                      border_width=0,
+        #                                      hover=False,
+        #                                      state="disabled",
+        #                                      command=None)
+        # self.main_menu_label.grid(row=0, column=0, sticky="nsew", padx=(4, 2), pady=4)
+        # # actual main menu
+        # self.main_menu_btn = ctk.CTkButton(self.main_menu_frame,
+        #                                    width=44, height=44,
+        #                                    text="", image=self.icons_dict["MenuIcon"],
+        #                                    fg_color="transparent",
+        #                                    command=None)
+        # self.main_menu_btn.grid(row=0, column=1, sticky="nsew", padx=(2, 4), pady=4)
         
         # Frames for buttons
         self.tools_btn_frame = {i: ctk.CTkFrame(self.left_panel, corner_radius=0) for i in range(5)}
-        frame_paddings = 4*[5] + [(5, 0)]
+        frame_paddings = [(0, 5)] + 3*[5] + [(5, 0)]
         for i in range(5):
-            self.tools_btn_frame[i].grid(row=i+1, column=0, sticky="nsew", padx=0, pady=frame_paddings[i])
+            self.tools_btn_frame[i].grid(row=i, column=0, sticky="nsew", padx=0, pady=frame_paddings[i])
         
         # Buttons
         # TODO all commands, in particular add the "right-click" that are a different tool now
