@@ -1084,7 +1084,7 @@ class SegmentationApp(ctk.CTk):
                                      buttons=[("Import image...", "import"), ("Cancel", None)])
             action = warn.return_value
             if action == "import":
-                self.open_image(add_mask=False)
+                return self.open_image(add_mask=False)
             else:
                 return False
         return True
@@ -1925,6 +1925,8 @@ class SegmentationApp(ctk.CTk):
     def open_image(self, path=None, add_mask=True):
         '''
         Load a .png or .jpg image and define an empty mask on it.
+        
+        Return True if a NEW image is correctly loaded, False otherwise
         '''
 
         if self.modified:
@@ -1938,7 +1940,7 @@ class SegmentationApp(ctk.CTk):
             elif answer == "discard":
                 self.set_modified(False)
             else:
-                return
+                return False
 
         self.deactivate_tools()
         self.set_controls_state(False)
@@ -1951,7 +1953,7 @@ class SegmentationApp(ctk.CTk):
             
             p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
             if not p:
-                return
+                return False
             
         else:
             p = path
@@ -1987,6 +1989,8 @@ class SegmentationApp(ctk.CTk):
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.set_status("ready", "Ready")
+        
+        return True
         
     def load_folder(self): # TODO rewrite open folder
         '''
