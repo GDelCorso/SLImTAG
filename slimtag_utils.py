@@ -857,7 +857,7 @@ class SplashScreen(tk.Toplevel):
         self.update()
 
 class ProportionalDropdownMenu(CustomDropdownMenu):
-    def __init__(self, widget, width=180, **kwargs):
+    def __init__(self, widget, width=90, **kwargs):
         super().__init__(widget=widget, width=width, **kwargs)
         self._stored_options = []
 
