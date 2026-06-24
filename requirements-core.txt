@@ -8,6 +8,7 @@ pillow==12.0.0
 # TkInter and CustomTkInter GUI
 customtkinter==5.2.2
 screeninfo==0.8.1
+ctkmenubarplus==1.3
 
 # Config file management
 tomlkit==0.14.0

@@ -1,4 +1,6 @@
 import customtkinter as ctk
+from CTkMenuBarPlus import CTkMenuBar, CustomDropdownMenu
+
 import tkinter as tk
 from screeninfo import get_monitors
 
@@ -853,3 +855,63 @@ class SplashScreen(tk.Toplevel):
     def _set(self, value):
         self.progress.set(value) 
         self.update()
+
+class ProportionalDropdownMenu(CustomDropdownMenu):
+    def __init__(self, widget, width=180, **kwargs):
+        super().__init__(widget=widget, width=width, **kwargs)
+        self._stored_options = []
+
+    def add_option(self, option, command=None, accelerator=None, tabs=None, state="normal"):
+        self._stored_options.append({
+            "type": "option",
+            "text": option,
+            "command": command,
+            "shortcut": accelerator,
+            "tabs": tabs,
+            "state": state
+        })
+    
+    def add_separator(self):
+        self._stored_options.append({
+            "type": "separator"
+        })   
+
+    def build_menu(self):
+        if not self._stored_options:
+            return
+
+        text_list = list(filter(lambda x: x.get("type") == "option", self._stored_options))
+        
+        max_text_len = max(len(opt["text"]) for opt in text_list)
+        
+        for opt in self._stored_options:
+            if opt.get("type") == "separator":
+                super().add_separator()
+                continue
+
+            final_text = f"{opt['text']}"
+            
+            if opt["shortcut"]:
+                if opt['tabs']:
+                    num_tabs = opt['tabs']
+                else:
+                    current_len = len(opt["text"])
+                    diff = max_text_len - current_len
+                    
+                    num_tabs = 1 + (diff // 8)
+
+                tabs = "\t" * num_tabs
+                final_text = f"{opt['text']}{tabs}"
+            
+            # Crea il pulsante usando solo argomenti nativi sicuri
+            btn = super().add_option(
+                option=final_text, 
+                command=opt["command"], 
+                accelerator=opt["shortcut"]
+            )
+            
+            # Applichiamo solo l'ancoraggio, che è supportato al 100%
+            if btn:
+                btn.configure(anchor="w", state=opt['state'])
+                
+        self._stored_options.clear()
