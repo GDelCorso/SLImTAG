@@ -49,6 +49,7 @@ Please note that the version numbers listed here refer to the environment in whi
 - scipy == 1.17.0 (erosion/dilation tool)
 - pillow == 12.0.0 (images management)
 - customtkinter == 5.2.2 (GUI)
+- ctkmenubarplus == 1.3 (custom CTk main menu)
 - screeninfo == 0.8.1 (recover screen info for UI management)
 - tomlkit == 0.14.0 (configuration file management)
 - scikit-optimize == 0.10.2 (Bayesian methods)
