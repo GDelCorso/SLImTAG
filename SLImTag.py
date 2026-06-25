@@ -29,7 +29,7 @@ from scipy import ndimage # for region operations (growing, dilation, erosion, f
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
-from CTkMenuBarPlus import CTkMenuBar, CustomDropdownMenu
+from CTkMenuBarPlus import CTkMenuBar
 import screeninfo
 
 # Image manipulation and TkInter interaction (ImageTk)
@@ -81,7 +81,7 @@ ctk.set_default_color_theme("color_palette.json") # CTK color theme
 HIGHLIGHT_COLOR = ctk.ThemeManager.theme["CTkButton"]["border_color"]
 
 # Suppress all warnings, Only on PROD
-# warnings.filterwarnings('ignore')  
+# warnings.filterwarnings('ignore')
 
 
 #%% SLImTAG main class
@@ -96,29 +96,19 @@ class SegmentationApp(ctk.CTk):
         # for now hard force dark mode
         self.slimtag_config["main"]["appearance"] = "dark" # TO BE REMOVED WHEN DONE
         
+        # TODO move set_appearance_mode to preferences window
+        # optionsmenu "dark", "light" with default value: "dark"
         ctk.set_appearance_mode(self.slimtag_config["main"]["appearance"])
-
-        # hide main window and open splash screen
         
         self.title("SLImTAG")
         self.geometry("1300x900")
         self.minsize(800, 600)
         self.iconphoto(False, ImageTk.PhotoImage(file=os.path.join("images", "main_icon.png")))
+        
+        # hide main window and open splash screen
         self.update_idletasks()
         self.withdraw()
-        
-        self.menu_bar = CTkMenuBar(self, bg_color=ctk.ThemeManager.theme["CTkTextbox"]["fg_color"][1])
-        
-        self.container = ctk.CTkFrame(self)
-        self.container.pack(fill="both", expand=True)
-        self.container.pack_propagate(False)
-        self.container.columnconfigure(1, weight=1)
-        self.container.rowconfigure(0, weight=1)
-        
         splash = SplashScreen(self)
-
-        # TODO move set_appearance_mode to preferences window
-        # optionsmenu "dark", "light" with default value: "dark"
         
         #%% Optional imports
         
@@ -360,6 +350,8 @@ class SegmentationApp(ctk.CTk):
 
         #%% Top Menu
         
+        self.menu_bar = CTkMenuBar(self, bg_color=ctk.ThemeManager.theme["CTkTextbox"]["fg_color"][1])
+        
         # File
         file_button = self.menu_bar.add_cascade("File")
         file_menu = ProportionalDropdownMenu(widget=file_button)
@@ -369,7 +361,7 @@ class SegmentationApp(ctk.CTk):
         # Edit
         edit_button = self.menu_bar.add_cascade("Edit")
         edit_menu = ProportionalDropdownMenu(widget=edit_button)
-        edit_menu.add_option("Undo", command=self.undo, accelerator="Ctrl+Z",tabs=2)
+        edit_menu.add_option("Undo", command=self.undo, accelerator="Ctrl+Z", tabs=2)
         # TODO implement preferences window
         edit_menu.add_option("Preferences", command=None, state="disabled")
         edit_menu.build_menu()
@@ -377,8 +369,8 @@ class SegmentationApp(ctk.CTk):
         # View
         view_button = self.menu_bar.add_cascade("View")
         view_menu = ProportionalDropdownMenu(widget=view_button)
-        view_menu.add_option("Zoom in", command=self.zoom_in, accelerator="Ctrl++",tabs=2)
-        view_menu.add_option("Zoom out", command=self.zoom_out, accelerator="Ctrl+-",tabs=2)
+        view_menu.add_option("Zoom in", command=self.zoom_in, accelerator="Ctrl++", tabs=2)
+        view_menu.add_option("Zoom out", command=self.zoom_out, accelerator="Ctrl+-", tabs=2)
         view_menu.add_option("Reset zoom", command=self.reset_zoom, accelerator="Ctrl+0")
         view_menu.build_menu()
 
@@ -423,109 +415,40 @@ class SegmentationApp(ctk.CTk):
             bio_menu = ProportionalDropdownMenu(widget=bio_button)
             bio_menu.add_option("Import NRRD/NIFTI/DICOM", command=self.biomedical_load)
             bio_menu.build_menu()
-        
-        '''
-        self.menu_bar = tk.Menu(self)
-        self.set_menu_theme(self.menu_bar, self.slimtag_config["main"]["appearance"])
-
-        self.config(menu=self.menu_bar)
-        self.topmenu_items = {}
-
-        # Menu File (top menu)
-        file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        file_menu.add_command(label="Quit", command=self.quit_program, accelerator="Ctrl+Q")
-        self.topmenu_items["file"] = file_menu
-        self.menu_bar.add_cascade(label="File", menu=file_menu)
-
-        # Menu Edit (top menu)
-        edit_menu = tk.Menu(self.menu_bar, tearoff=0)
-        edit_menu.add_command(label="Undo", command=self.undo, accelerator="Ctrl+Z")
-        # TODO implement preferences window
-        edit_menu.add_command(label="Preferences...", command=None, state="disabled")
-        self.topmenu_items["edit"] = edit_menu
-        self.menu_bar.add_cascade(label="Edit", menu=edit_menu)
-
-        # Menu View (top menu)
-        view_menu = tk.Menu(self.menu_bar, tearoff=0)
-        view_menu.add_command(label="Zoom in", command=self.zoom_in, accelerator="Ctrl++")
-        view_menu.add_command(label="Zoom out", command=self.zoom_out, accelerator="Ctrl+-")
-        view_menu.add_command(label="Reset zoom", command=self.reset_zoom, accelerator="Ctrl+0")
-        self.topmenu_items["view"] = view_menu
-        self.menu_bar.add_cascade(label="View", menu=view_menu)
-
-        # Menu Image (top menu)
-        image_menu = tk.Menu(self.menu_bar, tearoff=0)
-        image_menu.add_command(label="Import image", command=self.open_image, accelerator="Ctrl+I")
-        image_menu.add_command(label="Import folder", command=self.load_folder, accelerator="Ctrl+F", state="disabled")
-        # TODO reactivate import folder
-        self.topmenu_items["image"] = image_menu
-        self.menu_bar.add_cascade(label="Image", menu=image_menu)
-
-        # Menu Mask (top menu)
-        mask_menu = tk.Menu(self.menu_bar, tearoff=0)
-        mask_menu.add_command(label="Load mask", command=self.load_mask)
-        mask_menu.add_command(label="Save mask", command=lambda s=True: self.save_mask(switch_fast=s), accelerator="Ctrl+S")
-        mask_menu.add_command(label="Save mask as...", command=lambda s=False: self.save_mask(switch_fast=s))
-        mask_menu.add_separator()
-        mask_menu.add_command(label="Clear active mask", command=self.clear_active_mask)
-        mask_menu.add_command(label="Clear all masks", command=self.clear_all_masks)
-        self.topmenu_items["mask"] = mask_menu
-        self.menu_bar.add_cascade(label="Mask", menu=mask_menu)
-
-        # Menu Magic Wand (top menu)
-        # TODO implement load/save configuration
-        wand_menu = tk.Menu(self.menu_bar, tearoff=0)
-        wand_menu.add_command(label="Load configuration", command=None, state="disabled")
-        wand_menu.add_command(label="Save configuration", command=None, state="disabled")
-        self.topmenu_items["wand"] = wand_menu
-        self.menu_bar.add_cascade(label="Magic wand", menu=wand_menu)
-        
-        # Menu Help (top menu)
-        # TODO implement help functions
-        help_menu = tk.Menu(self.menu_bar, tearoff=0)
-        help_menu.add_command(label="Documentation", command=None, state="disabled")
-        help_menu.add_command(label="About", command=None, state="disabled")
-        self.topmenu_items["help"] = help_menu
-        self.menu_bar.add_cascade(label="Help", menu=help_menu)
-        
-        # (Optional) Biomedical menu (top menu)
-        if self.slimtag_config["modules"]["biomedical"]:
-            biomedical_menu = tk.Menu(self.menu_bar, tearoff=0)
-            biomedical_menu.add_command(label="Import NRRD/NIFTI/DICOM", command=self.biomedical_load)
-            self.topmenu_items["biomedical"] = biomedical_menu
-            self.menu_bar.add_cascade(label="Biomedical tools", menu=biomedical_menu, foreground=HIGHLIGHT_COLOR)
-        
-        '''
 
         #%% Main UI elements
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
+        self.main_container.pack(fill="both", expand=True) # forced to use .pack() by CTkMenuBarPlus.CTkMenuBar
+        self.main_container.pack_propagate(False)
+        
         panels_width = 250
         # Left panel for tools
-        self.left_panel = ctk.CTkFrame(self.container, width=panels_width, corner_radius=0)
+        self.left_panel = ctk.CTkFrame(self.main_container, width=panels_width, corner_radius=0)
         self.left_panel.grid(row=0, column=0, sticky="nsew")
         self.left_panel.grid_rowconfigure(5, weight=1)
         
         # Main canvas
         # TODO different frames with different widgets depending on load type
         # e.g. previous/next image for folder, slider with z-axis for medical...
-        self.main_canvas_frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.main_canvas_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
         self.main_canvas_frame.grid(row=0, column=1, sticky="nsew")
         self.main_canvas_frame.grid_rowconfigure(0, weight=1)
         self.main_canvas_frame.grid_columnconfigure(0, weight=1)
         
         # Right panel for masks
-        self.right_panel = ctk.CTkFrame(self.container, width=panels_width, corner_radius=0)
+        self.right_panel = ctk.CTkFrame(self.main_container, width=panels_width, corner_radius=0)
         self.right_panel.grid(row=0, column=2, sticky="nsew")
         self.right_panel.grid_rowconfigure(1, weight=1)
         self.right_panel.grid_rowconfigure(2, weight=2)
         
         # Statusbar
-        self.statusbar = ctk.CTkFrame(self.container, height=32, fg_color=("gray92", "gray14"), corner_radius=0)
+        self.statusbar = ctk.CTkFrame(self.main_container, height=32, fg_color=("gray92", "gray14"), corner_radius=0)
         self.statusbar.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=0, pady=0)
         self.statusbar.grid_columnconfigure(3, weight=1)
         
         # Grid configuration for main window
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        self.main_container.grid_columnconfigure(1, weight=1)
+        self.main_container.grid_rowconfigure(0, weight=1)
         
         #%% Left panel: Tools
         # Frame for main menu

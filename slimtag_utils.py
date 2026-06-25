@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from CTkMenuBarPlus import CTkMenuBar, CustomDropdownMenu
+from CTkMenuBarPlus import CustomDropdownMenu
 
 import tkinter as tk
 from screeninfo import get_monitors
@@ -850,15 +850,18 @@ class SplashScreen(tk.Toplevel):
 
     def step(self, value):
         value = value / 100
-        self._set(self.progress.get()+value) 
+        self._set(self.progress.get()+value)
 
     def _set(self, value):
-        self.progress.set(value) 
+        self.progress.set(value)
         self.update()
 
 class ProportionalDropdownMenu(CustomDropdownMenu):
-    def __init__(self, widget, width=90, corner_radius=0, **kwargs):
-        super().__init__(widget=widget, width=width, corner_radius=corner_radius, **kwargs)
+    def __init__(self, widget, width=90, corner_radius=0, separator_color="grey50", **kwargs):
+        super().__init__(widget=widget, width=width,
+                         corner_radius=corner_radius,
+                         separator_color=separator_color,
+                         **kwargs)
         self._stored_options = []
 
     def add_option(self, option, command=None, accelerator=None, tabs=None, state="normal"):
@@ -874,7 +877,7 @@ class ProportionalDropdownMenu(CustomDropdownMenu):
     def add_separator(self):
         self._stored_options.append({
             "type": "separator"
-        })   
+        })
 
     def build_menu(self):
         if not self._stored_options:
@@ -903,14 +906,12 @@ class ProportionalDropdownMenu(CustomDropdownMenu):
                 tabs = "\t" * num_tabs
                 final_text = f"{opt['text']}{tabs}"
             
-            # Crea il pulsante usando solo argomenti nativi sicuri
             btn = super().add_option(
-                option=final_text, 
-                command=opt["command"], 
+                option=final_text,
+                command=opt["command"],
                 accelerator=opt["shortcut"]
             )
             
-            # Applichiamo solo l'ancoraggio, che è supportato al 100%
             if btn:
                 btn.configure(anchor="w", state=opt['state'])
                 
