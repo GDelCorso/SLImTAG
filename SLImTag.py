@@ -2133,7 +2133,7 @@ class SegmentationApp(ctk.CTk):
             
             # save in temp folder
             current_mask_name = os.path.splitext(os.path.basename(self.path_original_image))[0] + ".png"
-            self.save_mask(path=os.path.join(self.temp_masks_folder.name, current_mask_name), next_on_fast=False)
+            self.save_mask(path=os.path.join(self.temp_masks_folder.name, current_mask_name), disable_next=True)
             
             # now change image
             self.path_original_image = self.list_images[self.current_img_idx]
@@ -2315,13 +2315,15 @@ class SegmentationApp(ctk.CTk):
         return True
 
 
-    def save_mask(self, path=None, switch_fast=False, next_on_fast=True):
+    def save_mask(self, path=None, switch_fast=False, disable_next=False):
         '''
         Save current mask as a proper indexed png file and an associated png image to 
         see the identified masks.
         
-        If next_on_fast = True, calls self.next_image() when the mask is fast saved
-        (only if a folder is opened)
+        When switch_fast is True and a folder is opened, the folder_mgmt.next_on_save
+        boolean option determine whether self.next_image() is called automatically, to
+        facilitate a continuous workflow. If disable_next is True, bypass this check
+        and never call self.next_image() on saving.
         
         path is used when other functions call save_mask
         '''
@@ -2397,7 +2399,7 @@ class SegmentationApp(ctk.CTk):
         if path is None:
             self.set_modified(False, self.current_img_idx)
         
-        if switch_fast and next_on_fast:
+        if switch_fast and (not disable_next) and self.slimtag_config["folder_mgmt"]["next_on_save"]:
             self.next_image()
         
         self.set_status("ready", "Ready")
@@ -2413,7 +2415,7 @@ class SegmentationApp(ctk.CTk):
         for i in range(len(self.list_images)):
             if self.modified[i]:
                 if i == self.current_img_idx:
-                    self.save_mask(switch_fast=True, next_on_fast=False)
+                    self.save_mask(switch_fast=True, disable_next=True)
                 else:
                     mask_name = os.path.splitext(os.path.basename(self.list_images[i]))[0] + ".png"
                     shutil.copy(os.path.join(self.temp_masks_folder.name, mask_name), self.save_path_folder)

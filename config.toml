@@ -6,6 +6,9 @@ undo_depth = 10 # max number of undo steps
 sam = true
 biomedical = true
 
+[folder_mgmt]
+next_on_save = true # if true, when a folder is loaded, quicksave (Ctrl+S) automatically loads the next image in the folder
+
 [bayesian_optimization]
 initial_points = 10
 max_iterations = 50
