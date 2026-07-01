@@ -676,7 +676,10 @@ class SegmentationApp(ctk.CTk):
         wand_models = ["Region growing"] + self.available_sam_models
         ctk.CTkLabel(self.tool_opt_frame["wand"], text="Magic wand settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
         self.wand_model_menu = ctk.CTkOptionMenu(self.tool_opt_frame["wand"], values=wand_models, command=self.wand_model_select)
-        self.wand_model_menu.set("Region growing")
+        if self.available_sam_models:
+            self.wand_model_menu.set(self.available_sam_models[0])
+        else:
+            self.wand_model_menu.set("Region growing")
         self.wand_model_menu.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
         Tooltip(self.wand_model_menu, text="Magic wand method")
         
