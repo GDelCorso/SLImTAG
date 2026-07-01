@@ -2362,6 +2362,7 @@ class SegmentationApp(ctk.CTk):
 
         # save mask names in png metadata (common to all PNGs))
         metadata = PngImagePlugin.PngInfo()
+        metadata.add_text("Software", "SLImTAG (https://github.com/GDelCorso/SLImTAG)")
         labels = {i: self.mask_labels[i] for i in self.mask_labels.keys()}
         metadata.add_text("labels", json.dumps(labels))
         
