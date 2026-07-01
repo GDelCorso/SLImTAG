@@ -20,6 +20,7 @@ import shutil
 import io
 import warnings
 import math
+import tempfile
 
 # Numerical arrays manipulation
 import numpy as np
@@ -176,10 +177,6 @@ class SegmentationApp(ctk.CTk):
         self.zoom_event_id = None
         self.update_opacity_id = None
         
-        # boolean switch to check if mask is modified and not saved
-        # TODO: for multiple images import
-        self.modified = False
-        
         # zoom & pan status
         self.zoom = 1.0
         self._pan_start = None
@@ -207,12 +204,19 @@ class SegmentationApp(ctk.CTk):
         self.mask_opacity = 150 # [0-255]
         self.mask_outline = tk.BooleanVar(self, value=False) # use outlined masks instead of filled ones
         
-        # List images and index for folder segmentation
-        self.list_images = None
-        self.list_index = None
-        self.path_aux_save = None
-        self.path_original_image = None
+        # List of images paths and index for folder segmentation
+        # (also for single images, this will be a list with one element and list_index=0)
+        self.list_images = [] # list of paths (strings)
+        self.current_img_idx = None # int
+        self.path_original_image = None # this usually is self.list_images[self.current_img_idx]
+        self.temp_masks_folder = None # temporary folder to store masks when a whole folder is loaded
+        self.save_path_folder = None # this is different than None only in case of folder loading
         self.quicksave_path = None
+        # list of boolean switches to check if mask is modified and not saved
+        # this is a list with the same len as self.list_images
+        self.modified = []
+        
+        self.allow_image_switch = True # determine if it is possible to move between images in the folder
         
         self.images_num_label_var = tk.StringVar(self, value="Image 0 of 0")
 
@@ -377,9 +381,8 @@ class SegmentationApp(ctk.CTk):
         # Image
         image_button = self.menu_bar.add_cascade("Image")
         image_menu = ProportionalDropdownMenu(widget=image_button)
-        image_menu.add_option("Import image", command=self.open_image, accelerator="Ctrl+I")
-        # TODO reactivate import folder
-        image_menu.add_option("Import folder", command=self.load_folder, accelerator="Ctrl+F", state="disabled")
+        image_menu.add_option("Open image", command=self.open_image, accelerator="Ctrl+I")
+        image_menu.add_option("Open folder", command=self.open_folder, accelerator="Ctrl+F")
         image_menu.build_menu()
 
         # Mask
@@ -388,6 +391,7 @@ class SegmentationApp(ctk.CTk):
         mask_menu.add_option("Load mask", command=self.load_mask, accelerator="")
         mask_menu.add_option("Save mask", command=lambda s=True: self.save_mask(switch_fast=s), accelerator="Ctrl+S")
         mask_menu.add_option("Save mask as...", command=lambda s=False: self.save_mask(switch_fast=s))
+        self.save_all_menu_btn = mask_menu.add_option("Save all masks", command=self.save_all_masks, accelerator="Ctrl+Shift+S", state="disabled", tabs=2)
         mask_menu.add_separator()
         mask_menu.add_option("Clear active mask", command=self.clear_active_mask)
         mask_menu.add_option("Clear all masks", command=self.clear_all_masks)
@@ -535,8 +539,27 @@ class SegmentationApp(ctk.CTk):
         volume_canvas_frame.zlabel.grid(row=0, column=1, sticky="e", padx=(0, 10))
         self.canvas_frames["volume"] = volume_canvas_frame
         
+        multi_canvas_frame = ctk.CTkFrame(self.main_canvas_frame, fg_color="transparent")
+        multi_canvas_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        multi_canvas_frame.grid_rowconfigure(0, weight=1)
+        multi_canvas_frame.grid_columnconfigure(0, weight=1)
+        multi_canvas_frame.canvas = ctk.CTkCanvas(multi_canvas_frame, bg="black", highlightthickness=0)
+        multi_canvas_frame.canvas.grid(row=0, column=0, sticky="nsew")
+        folder_nav_frame = ctk.CTkFrame(multi_canvas_frame, corner_radius=0)
+        folder_nav_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        folder_nav_frame.grid_columnconfigure(1, weight=1)
+        multi_canvas_frame.lbl = ctk.CTkLabel(folder_nav_frame, textvariable=self.images_num_label_var, anchor="w")
+        multi_canvas_frame.lbl.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        multi_canvas_frame.btn_prev = ctk.CTkButton(folder_nav_frame, text="Previous image [,]", command=lambda: self.next_image(direction='-'))
+        multi_canvas_frame.btn_prev.grid(row=0, column=2, sticky="ew", padx=(10, 5), pady=10)
+        multi_canvas_frame.btn_next = ctk.CTkButton(folder_nav_frame, text="Next image [.]", command=lambda: self.next_image(direction='+'))
+        multi_canvas_frame.btn_next.grid(row=0, column=3, sticky="ew", padx=(5, 10), pady=10)
+        self.canvas_frames["multi"] = multi_canvas_frame
+        
         # default view
         self.canvas = None
+        self.btn_prev = None
+        self.btn_next = None
         self.show_canvas_frame("default")
         
         #%% Right panel: Masks
@@ -629,7 +652,7 @@ class SegmentationApp(ctk.CTk):
         # Brush options
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Brush settings:", fg_color="transparent", font=ctk.CTkFont(size=17, weight='bold'), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 0))
         ctk.CTkLabel(self.tool_opt_frame["brush"], text="Shape", fg_color="transparent", anchor="w").grid(row=1, column=0, sticky="ew", padx=10, pady=(10, 2))
-        self.brush_shape_btn = ctk.CTkSegmentedButton(self.tool_opt_frame["brush"], values=["Circle", "Square", "Line"], command=lambda v: (setattr(self, "brush_shape", v), print (self.brush_shape)));
+        self.brush_shape_btn = ctk.CTkSegmentedButton(self.tool_opt_frame["brush"], values=["Circle", "Square", "Line"], command=lambda v: setattr(self, "brush_shape", v));
         self.brush_shape_btn.set(self.brush_shape)
         self.brush_shape_btn.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=0)
         
@@ -824,10 +847,10 @@ class SegmentationApp(ctk.CTk):
         self.bind("<Control-Z>", lambda e: self.undo())
         self.bind("<Control-I>", lambda e: self.open_image())
         self.bind("<Control-i>", lambda e: self.open_image())
-        #self.bind("<Control-F>", lambda e: self.load_folder()) # TODO reactivate load folder
-        #self.bind("<Control-f>", lambda e: self.load_folder())
-        self.bind("<Control-S>", lambda e: self.save_mask(switch_fast=True))
-        self.bind("<Control-s>", lambda e: self.save_mask(switch_fast=True))
+        self.bind("<Control-F>", lambda e: self.open_folder())
+        self.bind("<Control-f>", lambda e: self.open_folder())
+        self.bind("<Control-S>", self.save_event)
+        self.bind("<Control-s>", self.save_event)
         self.bind("<Control-q>", lambda e: self.quit_program())
         self.bind("<Control-Q>", lambda e: self.quit_program())
         self.bind("<q>", lambda e: self.quit_program())
@@ -842,10 +865,9 @@ class SegmentationApp(ctk.CTk):
         self.bind("<KeyRelease-Shift_L>", lambda e: self.shift_key_released())
         self.bind("<KeyRelease-Shift_R>", lambda e: self.shift_key_released())
         
-        # Next image
-        self.bind("<KeyPress-period>", lambda e: self.next_image())
-        # TODO when folder navigation will be implemented, uncomment this
-        #self.bind("<KeyPress-comma>", lambda e: self.prev_image())
+        # Previous & next image
+        self.bind("<KeyPress-period>", lambda e: self.next_image(direction='+'))
+        self.bind("<KeyPress-comma>", lambda e: self.next_image(direction='-'))
         
         #%% Clean-up at the end of __init__
         
@@ -861,30 +883,13 @@ class SegmentationApp(ctk.CTk):
         self.update()
         self.deiconify()
 
-
-        #%% TODO old code to be repurposed, DO NOT REMOVE UNTIL IMPLEMENTED BACK
-        # Images in folder navigation frame
-        # TODO move in main_canvas frame
-        # self.images_in_folder_frame = ctk.CTkFrame(self.right_panel)
-        # self.images_in_folder_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=5)
-        # self.images_in_folder_label = ctk.CTkLabel(self.images_in_folder_frame, textvariable=self.images_num_label_var)
-        # self.images_in_folder_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
-
-        # self.prev_image_btn = ctk.CTkButton(self.images_in_folder_frame, text="Previous image [,]", command=self.prev_image)
-        # self.prev_image_btn.grid(row=1, column=0, sticky="ew", padx=(10, 5), pady=(5, 10))
-        # self.prev_image_btn.configure(state="disabled")
-        # self.next_image_btn = ctk.CTkButton(self.images_in_folder_frame, text="Next image [.]", command=self.next_image)
-        # self.next_image_btn.grid(row=1, column=1, sticky="ew", padx=(5, 10), pady=(5, 10))
-        # self.next_image_btn.configure(state="disabled")
-        
-        # self.images_in_folder_frame.grid_columnconfigure([0, 1], weight=1)
-
-
     #%% AUX methods
     # Async method for efficient SAM loading
     def async_loader(self): # TODO rethink async_loader
         #print("Loading SAM model")
         self.status_sam_label.configure(text="(Loading image into SAM...)")
+        
+        self.toggle_prev_next("disabled")
         #  Thread-safe upload of shared variable
         with self.lock:
             self.switch_computed_magic_wand = False
@@ -917,8 +922,7 @@ class SegmentationApp(ctk.CTk):
 
         self.status_sam_label.configure(text="")
         
-        if self.list_images != None:
-            self.next_image_btn.configure(state="normal")
+        self.toggle_prev_next("normal")
             
         # Refresh and update display
         self.update_display(update_image=True)
@@ -1051,26 +1055,23 @@ class SegmentationApp(ctk.CTk):
         """
         Quit program.
         """
-        if self.modified:
-            if self.list_images != None:
-                # in folder mode, bypass check and always save changes on the current mask
-                self.save_mask(switch_fast=True)
+        if any(self.modified):
+            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                        buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
+                                       )
+            answer = confirm.return_value
+            if answer == "save":
+                if len(self.list_images) == 1:
+                    self.save_mask()
+                else:
+                    self.save_all_masks()
+                self.quit()
+                self.destroy()
+            elif answer == "discard":
                 self.quit()
                 self.destroy()
             else:
-                confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
-                                            buttons=(("Save & Quit", "save"), ("Discard & Quit", "discard"), ("Cancel", None))
-                                           )
-                answer = confirm.return_value
-                if answer == "save":
-                    self.save_mask()
-                    self.quit()
-                    self.destroy()
-                elif answer == "discard":
-                    self.quit()
-                    self.destroy()
-                else:
-                    return
+                return
         else:
             self.quit()
             self.destroy()
@@ -1078,7 +1079,16 @@ class SegmentationApp(ctk.CTk):
     #%% STATUS METHODS
     # update window title
     def update_title(self):
-        title_string = f"{'*' if self.modified else ''}SLImTAG{f' [{os.path.basename(self.path_original_image)}]' if self.path_original_image is not None else ''}"
+        # number of asterisks:
+        # - if a single image is loaded, 0 or 1 depending on if the current image is saved
+        # - if a folder with 2 or more images is loaded:
+        #   - one ADDITIONAL asterisk if the current image is modified and not saved
+        #   - one ADDITIONAL asterisk if there are other images modified and not saved
+        i = self.current_img_idx
+        current = self.modified[i]
+        others = any(self.modified[:i]) or any(self.modified[i+1:])
+        asterisks = (int(current) + int(others)) * '*'
+        title_string = f"{asterisks}SLImTAG{f' [{os.path.basename(self.path_original_image)}]' if self.path_original_image is not None else ''}"
         self.title(title_string)
 
     def image_is_loaded(self):
@@ -1107,16 +1117,17 @@ class SegmentationApp(ctk.CTk):
         self.status_label.configure(text=text)
         self.update_idletasks()
     
-    def set_modified(self, state):
+    def set_modified(self, state, i=None):
         """
-        Check if self.modified is different than state, and in that case update
+        Set self.modified[i] to state
+        
+        If i==None, set ALL self.modified to state
         """
-        if self.modified != state:
-            if state == True:
-                self.modified = True
-            else: # state == False
-                self.modified = False
-            self.update_title()
+        if i is not None:
+            self.modified[i] = state
+        else:
+            self.modified = [state] * len(self.list_images)
+        self.update_title()
     
     #%% APPEARANCE (DARK/LIGHT)
     def toggle_appearance(self):
@@ -1356,6 +1367,12 @@ class SegmentationApp(ctk.CTk):
         self.canvas = frame.canvas
         if frametype == "volume":
             self.volume_zslider = frame.slider
+        if frametype == "multi":
+            self.btn_prev = frame.btn_prev
+            self.btn_next = frame.btn_next
+            self.save_all_menu_btn.configure(state="normal")
+        else:
+            self.save_all_menu_btn.configure(state="disabled")
         # bind events to newly visible canvas
         self.canvas.bind("<Button-1>", self.on_canvas_left)
         self.canvas.bind("<Button-2>", self.on_canvas_mid)
@@ -1473,7 +1490,19 @@ class SegmentationApp(ctk.CTk):
         if self.zslider_preview is not None:
             self.zslider_preview.destroy()
             self.zslider_preview = None
-
+    
+    def toggle_prev_next(self, state):
+        """
+        Activate or deactivate previous and next images navigation.
+        
+        Here state is either 'normal' or 'disabled'
+        """
+        self.allow_image_switch = False if state == "disabled" else True
+        if self.btn_prev is not None:
+            self.btn_prev.configure(state=state)
+        if self.btn_next is not None:
+            self.btn_next.configure(state=state)
+    
     #%% UI TOOLS METHODS
     def show_tool_frame(self, tool):
         frame = self.tool_opt_frame[tool]
@@ -1827,9 +1856,9 @@ class SegmentationApp(ctk.CTk):
         # if all the statuses of the single masks are the same, change the "all" button as well
         all_statuses = set([self.mask_widgets[m].hidden for m in list(self.mask_labels.keys())])
         if len(all_statuses) == 1:
-            self.toggle_all_masks_hide(list(all_statuses)[0], propagate=False)
+            self.toggle_all_masks_hide(list(all_statuses)[0], propagate=False, update_display=False)
         else:
-            self.toggle_all_masks_hide(False, propagate=False)
+            self.toggle_all_masks_hide(False, propagate=False, update_display=False)
         if update_display:
             self.update_display(update_image=False)
     
@@ -1845,7 +1874,7 @@ class SegmentationApp(ctk.CTk):
         else:
             self.toggle_all_masks_lock(False, propagate=False)
     
-    def toggle_all_masks_hide(self, set_hide: bool, enabled=True, propagate=True):
+    def toggle_all_masks_hide(self, set_hide: bool, enabled=True, propagate=True, update_display=True):
         state = "normal" if enabled else "disabled"
         icon = "EyeClosed" if set_hide else "EyeOpen"
         self.hide_all_mask_btn.hidden = set_hide
@@ -1854,7 +1883,8 @@ class SegmentationApp(ctk.CTk):
             mask_ids = list(self.mask_labels.keys())
             for mid in mask_ids:
                 self.toggle_mask_hide(mid, set_hide, update_display=False)
-            self.update_display(update_image=False)
+            if update_display:
+                self.update_display(update_image=False)
 
     def toggle_all_masks_lock(self, set_lock: bool, enabled=True, propagate=True):
         state = "normal" if enabled else "disabled"
@@ -1901,14 +1931,15 @@ class SegmentationApp(ctk.CTk):
             self.update_lock()
         self.sam_preview = np.full(self.mask_orig.shape, False)
         
-
-
+        
         # Async load of the SAM model to avoid freezed interface
         if self.thread is None or not self.thread.is_alive():
             self.thread = threading.Thread(target=self.async_loader, daemon=True)
             self.thread.start()
-
-
+        
+        # set "Image n of n" label
+        img_idx = (self.current_img_idx + 1) if self.current_img_idx is not None else 0
+        self.images_num_label_var.set(f"Image {img_idx} of {len(self.list_images)}")
 
         # raise canvas
         # TODO: folder management -- raise appropriate canvas
@@ -1933,18 +1964,20 @@ class SegmentationApp(ctk.CTk):
     
     def open_image(self, path=None, add_mask=True):
         '''
-        Load a .png or .jpg image and define an empty mask on it.
+        Load a single .png or .jpg image and define an empty mask on it.
         
         Return True if a NEW image is correctly loaded, False otherwise
         '''
-
-        if self.modified:
+        if any(self.modified):
             confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
                                         buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
                                        )
             answer = confirm.return_value
             if answer == "save":
-                self.save_mask()
+                if len(self.list_images) == 1:
+                    self.save_mask()
+                else:
+                    self.save_all_masks()
                 self.set_modified(False)
             elif answer == "discard":
                 self.set_modified(False)
@@ -1956,27 +1989,26 @@ class SegmentationApp(ctk.CTk):
         
         # Dialog
         if path is None:
-            # Reset path
-            self.list_images = None
-            self.list_index = 0
-            
             p = filedialog.askopenfilename(filetypes=[("Image files", ("*.png", "*.jpg", "*.jpeg"))])
             if not p:
                 return False
-            
         else:
             p = path
+        
+        # reset masks
+        self.clear_all_masks()
+        
+        # reset images path
+        self.list_images = [p]
+        self.current_img_idx = 0
+        self.set_modified(False) # to reset length of self.modified
         
         self.path_original_image = p
         self.quicksave_path = os.path.splitext(p)[0] + "_mask.png"
 
         self.set_status("loading", "Loading image...")
         
-        # reset masks
-        self.clear_all_masks()
-        
         img = Image.open(p).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
-        
         self.load_image(img, change_canvas="default")
         
         self.update_title()
@@ -1986,39 +2018,37 @@ class SegmentationApp(ctk.CTk):
         
         if add_mask:
             self.add_mask("mask_1")
-        
 
-        
-        if self.list_images is None:
-            self.images_num_label_var.set("Image 1 of 1")
-            #self.next_image_btn.configure(state="disabled")
-            # TODO image navigation
-
-        self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        self.toggle_all_masks_hide(set_hide=False, enabled=True, update_display=False)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.set_status("ready", "Ready")
         
         return True
         
-    def load_folder(self): # TODO rewrite open folder
+    def open_folder(self, add_mask=True): # TODO rewrite open folder
         '''
-        Aux function to load a whole folder to speed up image segmentation
+        Load a whole folder to speed up image segmentation.
+        
+        Return True if a NEW folder is correctly loaded, False otherwise
         '''
         
         # Check already existing images/mask
-        if self.modified:
+        if any(self.modified):
             confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
                                         buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
                                        )
             answer = confirm.return_value
             if answer == "save":
-                self.save_mask()
+                if len(self.list_images) == 1:
+                    self.save_mask()
+                else:
+                    self.save_all_masks()
                 self.set_modified(False)
             elif answer == "discard":
                 self.set_modified(False)
             else:
-                return
+                return False
             
         self.deactivate_tools()
         self.set_controls_state(False)
@@ -2026,88 +2056,159 @@ class SegmentationApp(ctk.CTk):
         # Select a directory
         path_directory =  filedialog.askdirectory()
         if not path_directory:
-            return
+            return False
+
         
         # Define an aux directory to save masks:
-        self.path_aux_save = path_directory+"_mask"
+        self.save_path_folder = path_directory+"_mask"
+        if os.path.isdir(self.save_path_folder):
+            confirm = MultiButtonDialog(self, message=f"Folder '{os.path.basename(self.save_path_folder)}' already exists. Its content will be DELETED. Do you want to continue?",
+                                        buttons=(("Yes", "y"), ("No", "n"))
+                                        )
+            answer = confirm.return_value
+            if answer == "y":
+                shutil.rmtree(self.save_path_folder)
+            else:
+                return False
             
-        if os.path.isdir(self.path_aux_save): # TODO improve
-            shutil.rmtree(self.path_aux_save)
-        os.mkdir(self.path_aux_save)
+            
 
+        os.mkdir(self.save_path_folder)
+        
+                
+        # reset masks
+        self.clear_all_masks()
+        
         # Define the list of possible images
         self.list_images = sorted([os.path.join(path_directory, f) for f in os.listdir(path_directory) if f.lower().endswith((".png", ".jpg", ".jpeg"))])
-        self.list_index = 0
+        self.current_img_idx = 0
+        self.set_modified(False) # to reset length of self.modified
+        
+        self.path_original_image = self.list_images[self.current_img_idx]
+        filebasename = os.path.basename(self.path_original_image)
+        self.quicksave_path = os.path.join(self.save_path_folder, os.path.splitext(filebasename)[0] + ".png")
+        
+        self.temp_masks_folder = tempfile.TemporaryDirectory()
         
         # Load the image corresponding to list index
         self.set_status("loading", "Loading image...")
-
         
-        self.open_image(path=self.list_images[self.list_index])
+        img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
+        self.load_image(img, change_canvas="multi")
         
-        self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
-        self.next_image_btn.configure(state="disabled") # Originally disabled
+        self.update_title()
+        
+        # reset history
+        self.undo_stack.clear()
+        
+        if add_mask:
+            self.add_mask("mask_1")
+        
+        self.toggle_all_masks_hide(set_hide=False, enabled=True, update_display=False)
+        self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.set_status("ready", "Ready")
         
-    def next_image(self): # TODO previous image (even better, a parameter 'direction'='+' or '-')
+        return True
+        
+    def next_image(self, direction='+'):
         '''
         Binding for next image
         '''
-        if self.list_images != None and (self.list_index < len(self.list_images)-1):
+        if len(self.list_images) > 1 and self.allow_image_switch:
             
+            match direction:
+                case '+':
+                    self.current_img_idx = (self.current_img_idx + 1) % len(self.list_images)
+                case '-':
+                    self.current_img_idx = (self.current_img_idx - 1) % len(self.list_images)
+                case _:
+                    return
             
             # Load the image corresponding to list index
             self.set_status("loading", "Loading next image...")
             
-            # Save # TODO - Add a warning
-            self.save_mask(switch_fast=True)
+            # save in temp folder
+            current_mask_name = os.path.splitext(os.path.basename(self.path_original_image))[0] + ".png"
+            self.save_mask(path=os.path.join(self.temp_masks_folder.name, current_mask_name), next_on_fast=False)
             
-            self.list_index += 1
-        
-            self.open_image(path=self.list_images[self.list_index])
+            # now change image
+            self.path_original_image = self.list_images[self.current_img_idx]
+            filebasename = os.path.basename(self.path_original_image)
+            self.quicksave_path = os.path.join(self.save_path_folder, os.path.splitext(filebasename)[0] + ".png")
             
-            self.images_num_label_var.set(f"Image {self.list_index+1} of {len(self.list_images)}")
+            # check if masks exists among temp ones
+            temp_mask = os.path.join(self.temp_masks_folder.name, os.path.splitext(filebasename)[0] + ".png")
+            if os.path.exists(temp_mask):
+                # here we assume masks already created with SLImTAG
+                arr = np.array(Image.open(temp_mask), dtype=np.uint8)
+            else:
+                arr = None
+
+            img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
+            self.load_image(img, mask=arr) # don't change canvas, assume "multi" already raised, and don't change labels--just add temp mask if it exists
             
-            self.next_image_btn.configure(state="disabled") # Disable next img
-            self.switch_computed_magic_wand = False # Disable MAGIC WAND
-            self.magic_btn.configure(state="disabled")
+            self.update_title()
+            
+            # reset history
+            self.undo_stack.clear()
             
             self.set_status("ready", "Ready")
-
-    def load_mask(self): # TODO rename "open mask"?
+            
+    def load_mask(self):
         """
         Upload an existing mask
         - Indexed PNG (mode "P"): direct recovery of mask indices.
         - RGB PNG: legacy color-based reconstruction.
         - (for volumes): TAR containing indexed PNG files, as produced by save_mask
+        
+        Return True if the mask is correctly loaded, False otherwise
         """
         if not self.image_is_loaded():
-            return
+            return False
+        
+        # bypass check when called from other functions
+        if any(self.modified):
+            confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
+                                        buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
+                                       )
+            answer = confirm.return_value
+            if answer == "save":
+                if len(self.list_images) == 1:
+                    self.save_mask()
+                else:
+                    self.save_all_masks()
+                self.set_modified(False)
+            elif answer == "discard":
+                self.set_modified(False)
+            else:
+                return False
         
         self.deactivate_tools()
+        
         if self.is_volume_loaded:
             def_ext = ".tar"
             ftypes = [("TAR archive of indexed PNGs", ".tar")]
         else:
             def_ext = ".png"
             ftypes = [("PNG (indexed or RGB)", "*.png")]
+        
         p = filedialog.askopenfilename(filetypes=ftypes)
         if not p:
-            return
-
+            return False
+        
+        ext = os.path.splitext(p)[1].lower()
+        if ext != def_ext:
+            return False
+        
         self.set_status("loading", "Loading mask...")
         
         self.push_undo()
-        ext = os.path.splitext(p)[1].lower()
-        if ext != def_ext:
-            return
         
         self.quicksave_path = p
         
-        # RESET ALL MASKS
+        # reset all masks
         self.clear_all_masks()
-        
         
         if self.is_volume_loaded:
             with tarfile.open(p, mode="r") as tf:
@@ -2202,42 +2303,50 @@ class SegmentationApp(ctk.CTk):
         # prepare empty mask with same size for SAM preview
         self.sam_preview = np.full(self.mask_orig.shape, False)
 
-        self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        self.toggle_all_masks_hide(set_hide=False, enabled=True, update_display=False)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
         
         self.update_display(update_image=True)
         self.set_status("ready", "Ready")
+        
+        return True
 
 
-    def save_mask(self, switch_fast=False):
+    def save_mask(self, path=None, switch_fast=False, next_on_fast=True):
         '''
-        Save mask as a proper indexed png file and an associated png image to 
+        Save current mask as a proper indexed png file and an associated png image to 
         see the identified masks.
+        
+        If next_on_fast = True, calls self.next_image() when the mask is fast saved
+        (only if a folder is opened)
+        
+        path is used when other functions call save_mask
         '''
         # Check if an image is loaded
         if not self.image_is_loaded():
             return
         if self.mask_orig is None:
             return
-    
-        if not switch_fast:
-            # Save as()
-            if self.is_volume_loaded:
-                def_ext = ".tar"
-                ftypes = [("TAR archive of indexed PNGs", ".tar")]
-            else:
-                def_ext = ".png"
-                ftypes = [("PNG (indexed)", "*.png")]
-            p = filedialog.asksaveasfilename(defaultextension=def_ext, filetypes=ftypes)
-            if not p:
-                return
-        else: # Save()
-            # If working with a folder # TODO adapt to volume folder
-            if self.list_images != None:
-                p = os.path.join(self.path_aux_save, os.path.splitext(os.path.basename(self.list_images[self.list_index]))[0]+".png")
-            # Otherwise
-            else:
+        
+        if path is None:
+            if not switch_fast:
+                # Save as()
+                if self.is_volume_loaded:
+                    def_ext = ".tar"
+                    ftypes = [("TAR archive of indexed PNGs", ".tar")]
+                else:
+                    def_ext = ".png"
+                    ftypes = [("PNG (indexed)", "*.png")]
+                p = filedialog.asksaveasfilename(defaultextension=def_ext, filetypes=ftypes)
+                if not p:
+                    return
+                # change quicksave path to selected one, unless in folder mode
+                if len(self.list_images) == 1:
+                    self.quicksave_path = p
+            else: # Save()
                 p = self.quicksave_path
+        else:
+            p = path
         
         self.set_status("loading", "Saving mask...")
         
@@ -2280,23 +2389,62 @@ class SegmentationApp(ctk.CTk):
             mask_to_save.putpalette(palette)
             mask_to_save.save(p, pnginfo=metadata)
         
-        self.set_modified(False)
+        # change modified status only for user-provided masks,
+        # otherwise let the function that calls save_mask handle it
+        if path is None:
+            self.set_modified(False, self.current_img_idx)
+        
+        if switch_fast and next_on_fast:
+            self.next_image()
+        
         self.set_status("ready", "Ready")
-
+    
+    def save_all_masks(self):
+        """
+        If a folder is loaded, save all the masks for the files in the folder
+        """
+        # do nothing if a single image is loaded
+        if len(self.list_images) <= 1:
+            return
+        
+        for i in range(len(self.list_images)):
+            if self.modified[i]:
+                if i == self.current_img_idx:
+                    self.save_mask(switch_fast=True, next_on_fast=False)
+                else:
+                    mask_name = os.path.splitext(os.path.basename(self.list_images[i]))[0] + ".png"
+                    shutil.copy(os.path.join(self.temp_masks_folder.name, mask_name), self.save_path_folder)
+                self.set_modified(False, i)
+        
+        self.update_title()
+        
+    def save_event(self, e):
+        """Just to bind correctly the ctrl-save"""
+        shift_pressed = (e.state & 0x0001) != 0
+        if shift_pressed:
+            self.save_all_masks()
+        else:
+            self.save_mask(switch_fast=True)
+        
 #%% BIOMEDICAL LOAD
 
     def biomedical_load(self, path=None, add_mask=True):
         '''
         Load a DICOM/NIFTI/NRRD image and define an empty mask on it.
+        
+        Return True if a NEW image is correctly loaded, False otherwise
         '''
     
-        if self.modified:
+        if any(self.modified):
             confirm = MultiButtonDialog(self, message="There are unsaved changes. What do you want to do?",
                                         buttons=(("Save changes", "save"), ("Discard changes", "discard"), ("Cancel", None))
                                        )
             answer = confirm.return_value
             if answer == "save":
-                self.save_mask()
+                if len(self.list_images) == 1:
+                    self.save_mask()
+                else:
+                    self.save_all_masks()
                 self.set_modified(False)
             elif answer == "discard":
                 self.set_modified(False)
@@ -2308,14 +2456,9 @@ class SegmentationApp(ctk.CTk):
         
         # Dialog
         if path is None:
-            # Reset path
-            self.list_images = None
-            self.list_index = 0
-            
             p = filedialog.askopenfilename(filetypes=[("Biomedical data files", ("*.dcm", "*.nrrd", "*.nii"))])
             if not p:
                 return
-            
         else:
             p = path
     
@@ -2377,6 +2520,10 @@ class SegmentationApp(ctk.CTk):
         img = Image.fromarray(self.volume_disp[..., initial_slice]).convert("RGB")
         self.load_image(img, mask=slice_mask, change_canvas=canvas_frame)
         
+        # reset images path
+        self.list_images = [p]
+        self.current_img_idx = 0
+        self.set_modified(False) # to reset length of self.modified
         
         self.path_original_image = p
         self.quicksave_path = os.path.splitext(p)[0] + "_mask." + ("tar" if self.is_volume_loaded else "png")
@@ -2388,19 +2535,16 @@ class SegmentationApp(ctk.CTk):
         
         if add_mask:
             self.add_mask("mask_1")
-        
-        self.update_display(update_image=True)
+
         
         self.show_preview_frame("image")
         self.update_preview_frame()
-        
-        if self.list_images is None:
-            self.images_num_label_var.set("Image 1 of 1")
-            #self.next_image_btn.configure(state="disabled")
-            # TODO image navigation
     
-        self.toggle_all_masks_hide(set_hide=False, enabled=True)
+        self.toggle_all_masks_hide(set_hide=False, enabled=True, update_display=False)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
+        
+                
+        self.update_display(update_image=True)
         
         self.set_status("ready", "Ready")
 
@@ -2873,7 +3017,7 @@ class SegmentationApp(ctk.CTk):
         lock_area[mask_area==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         lock_area[mask_area==0] = False
         # Mark mask as modified for later saving or GUI update
-        self.set_modified(True)
+        self.set_modified(True, self.current_img_idx)
 
     def draw_brush_preview(self, e):
         '''
@@ -2994,7 +3138,7 @@ class SegmentationApp(ctk.CTk):
                 self.mask_orig[self.sam_preview] = self.active_mask_id
             else:
                 self.mask_orig[self.sam_preview & (self.mask_orig==self.active_mask_id)] = 0
-            self.set_modified(True)
+            self.set_modified(True, self.current_img_idx)
         self.sam_preview = np.full(self.mask_orig.shape, False) # reset preview
         self.sam_points = []
         self.sam_pt_labels = []
@@ -3049,7 +3193,7 @@ class SegmentationApp(ctk.CTk):
         self.push_undo()
         
         self.mask_orig[region & (~self.mask_locked)] = self.active_mask_id
-        self.set_modified(True)
+        self.set_modified(True, self.current_img_idx)
         self.update_display(update_image=False)
         self.set_status("ready", "Ready")
         
@@ -3103,7 +3247,7 @@ class SegmentationApp(ctk.CTk):
         else:
             self.mask_orig[(self.mask_orig==self.active_mask_id) & (~comp)] = 0
         
-        self.set_modified(True)
+        self.set_modified(True, i=self.current_img_idx)
         # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig==0] = False
@@ -3138,7 +3282,7 @@ class SegmentationApp(ctk.CTk):
         self.mask_orig[filled_comp & (~self.mask_locked)] = self.active_mask_id
         
         # post-fill adjustments
-        self.set_modified(True)
+        self.set_modified(True, self.current_img_idx)
         # Update lock status
         self.mask_locked[self.mask_orig == self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig == 0] = False
@@ -3189,7 +3333,7 @@ class SegmentationApp(ctk.CTk):
         # the old component even if active mask is locked"
         self.mask_orig[comp_smooth & (comp|(~self.mask_locked))] = self.active_mask_id
         
-        self.set_modified(True)
+        self.set_modified(True, self.current_img_idx)
         # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig==0] = False
