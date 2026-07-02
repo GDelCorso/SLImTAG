@@ -208,7 +208,7 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 - [ ] ~~Convert hardcoded parameters to argparse arguments~~
 - [ ] ~~Define an additional .csv containing name/mask value bindings for semantic segmentation when needed~~
 - [x] Save mask names in PNG metadata
-- [ ] Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
+- [ ] (WIP) Folder management improvements (add checks, better save options, warnings before overwriting, add "previous image")
 - [x] Move color picker to utils (and cleanup its code)
 - [x] When an image is loaded, add the file name to window title (e.g. "SLImTAG (model) - image_name.png", or "SLImTAG (model) [image_name.png]"). Maybe move model name to statusbar instead of window title?
 
@@ -237,11 +237,11 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 - [x] Add toggle "lock mask" in mask list to prevent overwriting per-mask as well as any mask
 - [ ] TO CONSIDER: allow opening a mask without an underlying image for direct mask editing (maybe create a dummy black image with suitable size, to be discarded)
 - [x] When "Load mask" is used, bind "Quick save" (<kbd>Ctrl</kbd>+<kbd>S</kbd>) to loaded mask path instead of default one
+- [ ] BUG: when a volume is loaded, "undo" overwrites the _current_ slice mask with the last mask in the history, even if it was defined over a different slice
 
 #### Brush
 
 - [x] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
-- [ ] BUG: _any_ brush past the first click on a slice of a biomedical volume is not saved in the volume mask
 
 #### Magic wand
 

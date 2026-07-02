@@ -1665,7 +1665,7 @@ class SegmentationApp(ctk.CTk):
             return
         
         if self.undo_stack:
-            self.mask_orig = self.undo_stack.pop()
+            self.mask_orig[:] = self.undo_stack.pop()
             self.update_lock()
             self.update_display(update_image=False)
     
