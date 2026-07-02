@@ -2104,7 +2104,7 @@ class SegmentationApp(ctk.CTk):
         self.set_status("loading", "Loading image...")
         
         img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
-        self.load_image(img, change_canvas="multi")
+        self.load_image(img, change_canvas="multi" if len(self.list_images) > 1 else "default")
         
         self.update_title()
         
