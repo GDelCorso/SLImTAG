@@ -241,6 +241,7 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 #### Brush
 
 - [x] BUG: when undoing Brush, the first position does not get undone (and sometimes cannot be undone)
+- [ ] BUG: _any_ brush past the first click on a slice of a biomedical volume is not saved in the volume mask
 
 #### Magic wand
 
