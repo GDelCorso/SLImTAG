@@ -874,6 +874,9 @@ class SegmentationApp(ctk.CTk):
         
         #%% Clean-up at the end of __init__
         
+        # execute once to load SAM model if necessary
+        self.wand_model_select(self.wand_model_menu.get())
+        
         # Deactivate all buttons -- must be done after defining switch_computed_magic_wand
         self.set_controls_state(False)
 
@@ -889,7 +892,11 @@ class SegmentationApp(ctk.CTk):
     #%% AUX methods
     # Async method for efficient SAM loading
     def async_loader(self): # TODO rethink async_loader
+        if self.image_orig is None:
+            return
+        
         #print("Loading SAM model")
+        
         self.status_sam_label.configure(text="(Loading image into SAM...)")
         
         self.toggle_prev_next("disabled")
