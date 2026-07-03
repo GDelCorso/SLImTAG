@@ -2135,6 +2135,9 @@ class SegmentationApp(ctk.CTk):
                 case _:
                     return
             
+            self.deactivate_tools()
+            self.set_controls_state(False)
+            
             # Load the image corresponding to list index
             self.set_status("loading", "Loading next image...")
             
