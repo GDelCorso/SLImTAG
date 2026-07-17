@@ -88,7 +88,6 @@ HIGHLIGHT_COLOR = ctk.ThemeManager.theme["CTkButton"]["border_color"]
 class SegmentationApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
         self.slimtag_config = self.load_config_file(CONFIG_FILE_PATH)
         
         # TODO
@@ -218,7 +217,6 @@ class SegmentationApp(ctk.CTk):
 
         # mouse position for events that need it
         self.mouse = {'x': None, 'y': None}
-        
         splash.step(10)
         
         # tools
@@ -485,7 +483,7 @@ class SegmentationApp(ctk.CTk):
         self.create_tool_button("brush", 0, 0, 0, help_text="Brush [B]")
         self.create_tool_button("eraser", 0, 0, 1, help_text="Eraser")
         self.create_tool_button("polygon", 0, 1, 0)
-        self.create_tool_button("bbox", 0, 1, 1)
+        self.create_tool_button("bbox", 0, 1, 1, help_text="Rectangiular Mask")
         self.create_tool_button("cut", 0, 2, 0, help_text="Cut component [C]")
         self.create_tool_button("clean", 0, 2, 1, help_text="Keep component")
         self.create_tool_button("bucket", 0, 3, 0, last_row=True)
@@ -922,6 +920,8 @@ class SegmentationApp(ctk.CTk):
             
         # Refresh and update display
         self.update_display(update_image=True)
+        self.reset_bbox()
+        
     
     def sam_loader(self, model_type):
         """
@@ -1509,7 +1509,7 @@ class SegmentationApp(ctk.CTk):
                     )
             # TODO: deactivate the hard-coded always disabled
             always_disabled = [
-                "polygon", "bbox", "bucket",
+                "polygon", "bucket",
                 "denoise", "interpolate",
                 "wand_all", "wand_box",
                 "ruler", "area",
@@ -2419,6 +2419,7 @@ class SegmentationApp(ctk.CTk):
         if not any(self.tool_active[tool] for tool in self.tool_active):
             self._pan_start = (e.x, e.y, self.view_x, self.view_y)
             return
+
         
         # Check position
         x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
@@ -2429,6 +2430,11 @@ class SegmentationApp(ctk.CTk):
         else:
             check_inside_image = True
         
+        if self.tool_active["bbox"]:
+            if self.bbox[0] is None:
+                self.bbox[0] = (e.x,e.y)
+            return
+
         if self.tool_active["smooth"] and check_inside_image:
             x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
@@ -2484,12 +2490,64 @@ class SegmentationApp(ctk.CTk):
         self.draw_brush_preview(e)
 
     def on_canvas_left_release(self, e):
+        if self.tool_active["bbox"]:
+            if self.bbox[1] is None:
+                self.bbox[1] = (e.x,e.y)
+            
+            # Define the brush drag
+            x0 = int((self.bbox[0][0])*(self.view_w/self.canvas.winfo_width())) + self.view_x
+            y0 = int((self.bbox[0][1])*(self.view_h/self.canvas.winfo_height())) + self.view_y
+            x1 = int((self.bbox[1][0])*(self.view_w/self.canvas.winfo_width())) + self.view_x
+            y1 = int((self.bbox[1][1])*(self.view_h/self.canvas.winfo_height())) + self.view_y
+            
+
+            self.reset_bbox()
+
+            #self.push_undo()            
+            self.bbox_at([[x0, y0], [x1 ,y1]])
+
         self.last_brush_pos = None
         self._pan_start = None
         self._drag_counter = 0
         self.update_display(update_image=True)
         self.draw_brush_preview(e)
-     
+    
+    def bbox_at(self, p):
+        outside_points = [0,0];
+        
+        for i in range(len(p)):
+            if p[i][0] < 0:
+                outside_points[0] += 1
+                p[i][0] = 0
+
+            if p[i][0] > self.mask_orig.shape[0]:
+                outside_points[0] += 1
+                p[i][0] = self.mask_orig.shape[0]
+
+            if p[i][1] < 0:
+                outside_points[1] += 1
+                p[i][1] = 0
+
+            if p[i][1] > self.mask_orig.shape[1]:
+                outside_points[1] += 1
+                p[i][1] = self.mask_orig.shape[1]
+
+        if outside_points[0] == 2 or outside_points[1] == 2:
+            # Outside
+            return          
+        
+        self.push_undo()
+
+        p = np.array(p)    
+        x0, y0 = p.min(axis=0)
+        x1, y1 = p.max(axis=0)
+        
+        self.mask_orig[y0:y1, x0:x1] = self.active_mask_id
+
+    def reset_bbox(self):
+        self.bbox = [None, None]
+        self.canvas.delete("bbox")
+        
 
     def on_canvas_right(self, e):
         '''
@@ -2526,13 +2584,17 @@ class SegmentationApp(ctk.CTk):
         
         # Check if the brush is not active (only draggable tool)
         # TODO implement other tools
-        if not (self.tool_active["brush"] or self.tool_active["eraser"]):
+        if not (self.tool_active["brush"] or self.tool_active["eraser"] or self.tool_active["bbox"]):
             return
         
         # Define the brush drag
         x1 = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y1 = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
+        if(self.tool_active['bbox']):
+            self.draw_bbox_preview(e)
+            return
+
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
             self._prev_brush_pos = (x1, y1)
             # If brush is active, remove the starting point generated by first click event
@@ -2681,7 +2743,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
-        if self.image_orig is None:
+        if self.image_orig is None or self.bbox[0] is not None:
             return
         
         # change status while zoom function is inefficient, so that user is aware
@@ -2723,7 +2785,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom out).
         '''
         # Check if an image is loaded
-        if self.image_orig is None:
+        if self.image_orig is None or self.bbox[0] is not None:
             return
         
         # change status while zoom function is inefficient, so that user is aware
@@ -2874,6 +2936,13 @@ class SegmentationApp(ctk.CTk):
         lock_area[mask_area==0] = False
         # Mark mask as modified for later saving or GUI update
         self.set_modified(True)
+
+    def draw_bbox_preview(self, e):
+        if self.mask_orig is None or self.active_mask_id is None:
+            return
+        self.canvas.delete("bbox")
+        outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
+        self.canvas.create_rectangle(self.bbox[0][0], self.bbox[0][1], e.x, e.y, fill=outline_color, outline='', width=0, tag="bbox")
 
     def draw_brush_preview(self, e):
         '''
