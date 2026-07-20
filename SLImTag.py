@@ -2514,29 +2514,19 @@ class SegmentationApp(ctk.CTk):
         self.draw_brush_preview(e)
     
     def bbox_at(self, p):
-        outside_points = [0,0];
-        
         for i in range(len(p)):
             if p[i][0] < 0:
-                #outside_points[0] += 1
                 p[i][0] = 0
 
             if p[i][0] > self.mask_orig.shape[0]:
-                #outside_points[0] += 1
                 p[i][0] = self.mask_orig.shape[0]
 
             if p[i][1] < 0:
-                #outside_points[1] += 1
                 p[i][1] = 0
 
             if p[i][1] > self.mask_orig.shape[1]:
-                #outside_points[1] += 1
                 p[i][1] = self.mask_orig.shape[1]
 
-        if outside_points[0] == 2 or outside_points[1] == 2:
-            # Outside
-            return          
-        
         self.push_undo()
 
         p = np.array(p)    
