@@ -2430,7 +2430,7 @@ class SegmentationApp(ctk.CTk):
         else:
             check_inside_image = True
         
-        if self.tool_active["bbox"]:
+        if self.tool_active["bbox"] and self.mid_pressed == False:
             if self.bbox[0] is None:
                 self.bbox[0] = (e.x,e.y)
             return
@@ -2482,6 +2482,7 @@ class SegmentationApp(ctk.CTk):
     def on_canvas_mid(self, e):
         self.mid_pressed = True
         self._pan_start = (e.x, e.y, self.view_x, self.view_y)
+        self.reset_bbox()
    
     def on_canvas_mid_release(self, e):
         self.mid_pressed = False
@@ -2490,7 +2491,7 @@ class SegmentationApp(ctk.CTk):
         self.draw_brush_preview(e)
 
     def on_canvas_left_release(self, e):
-        if self.tool_active["bbox"]:
+        if self.tool_active["bbox"] and self.bbox[0] is not None:
             if self.bbox[1] is None:
                 self.bbox[1] = (e.x,e.y)
             
@@ -2517,19 +2518,19 @@ class SegmentationApp(ctk.CTk):
         
         for i in range(len(p)):
             if p[i][0] < 0:
-                outside_points[0] += 1
+                #outside_points[0] += 1
                 p[i][0] = 0
 
             if p[i][0] > self.mask_orig.shape[0]:
-                outside_points[0] += 1
+                #outside_points[0] += 1
                 p[i][0] = self.mask_orig.shape[0]
 
             if p[i][1] < 0:
-                outside_points[1] += 1
+                #outside_points[1] += 1
                 p[i][1] = 0
 
             if p[i][1] > self.mask_orig.shape[1]:
-                outside_points[1] += 1
+                #outside_points[1] += 1
                 p[i][1] = self.mask_orig.shape[1]
 
         if outside_points[0] == 2 or outside_points[1] == 2:
@@ -2938,7 +2939,7 @@ class SegmentationApp(ctk.CTk):
         self.set_modified(True)
 
     def draw_bbox_preview(self, e):
-        if self.mask_orig is None or self.active_mask_id is None:
+        if self.mask_orig is None or self.active_mask_id is None or self.bbox[0] is None:
             return
         self.canvas.delete("bbox")
         outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
