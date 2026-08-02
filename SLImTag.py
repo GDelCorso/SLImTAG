@@ -152,6 +152,8 @@ class SegmentationApp(ctk.CTk):
         # current image preview (in sub canvas)
         self.current_preview_canvas = None
         self.preview_scale = 1.0
+        # BOOLEAN mask preview for tools that need it
+        self.mask_preview = None
         # Matrix of locked masks
         self.mask_locked = None
         
@@ -160,8 +162,8 @@ class SegmentationApp(ctk.CTk):
 
         # aux display variables
         self.tk_ov = None
-        self.sam_preview_pil = None
-        self.tk_sam_preview = None
+        self.mask_preview_pil = None
+        self.tk_mask_preview = None
         self.volume_disp = None # volume display casted as uint8 array
         self.volume_mask = None # 3D numpy array for volume masks
         self.volume_preview = None # resized volume for fast slider preview
@@ -269,6 +271,9 @@ class SegmentationApp(ctk.CTk):
         self.smooth_n_erosions = 1
         self.smooth_n_dilations = 1
         
+        # rectangular mask controls
+        self.bbox_start = None # starting corner of rectangular mask
+        
         # undo list
         self.undo_stack = []
         
@@ -292,7 +297,6 @@ class SegmentationApp(ctk.CTk):
                     self.available_sam_models.append(sam_model)
         self.sam_points = []
         self.sam_pt_labels = []
-        self.sam_preview = None # boolean matrix for multipoint SAM preview
         # to store IDs of <Return> and <Escape> events for multipoint SAM tool
         self.sam_bind_enter = None
         self.sam_bind_esc = None
@@ -313,6 +317,7 @@ class SegmentationApp(ctk.CTk):
         self.b3_pressed = False # right mouse button
         self.mid_pressed = False # middle mouse button
         self.shift_pressed = False # shift (any)
+        self.b3_released = False # right mouse button release
         
         # asynchronous mechanism to speed up image loading
         self.switch_computed_magic_wand = False     # True if SAM is loaded
@@ -483,7 +488,7 @@ class SegmentationApp(ctk.CTk):
         self.create_tool_button("brush", 0, 0, 0, help_text="Brush [B]")
         self.create_tool_button("eraser", 0, 0, 1, help_text="Eraser")
         self.create_tool_button("polygon", 0, 1, 0)
-        self.create_tool_button("bbox", 0, 1, 1, help_text="Rectangiular Mask")
+        self.create_tool_button("bbox", 0, 1, 1, help_text="Rectangular mask")
         self.create_tool_button("cut", 0, 2, 0, help_text="Cut component [C]")
         self.create_tool_button("clean", 0, 2, 1, help_text="Keep component")
         self.create_tool_button("bucket", 0, 3, 0, last_row=True)
@@ -920,7 +925,6 @@ class SegmentationApp(ctk.CTk):
             
         # Refresh and update display
         self.update_display(update_image=True)
-        self.reset_bbox()
         
     
     def sam_loader(self, model_type):
@@ -1234,12 +1238,12 @@ class SegmentationApp(ctk.CTk):
         if self.blended is None or update_blended:
             self.update_blended()
 
-        # if SAM is active, create also multipoint preview
-        if any(self.tool_active[tool] for tool in ["wand", "wand_multi"]):
+        # if any tool with preview is active, create also preview layer
+        if any(self.tool_active[tool] for tool in ["wand", "wand_multi", "bbox"]):
             # create new mask view and populate
             cut_mask_preview = np.full((self.view_h, self.view_w), False)
             try:
-                cut_mask_preview[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.sam_preview[top:bottom, left:right]
+                cut_mask_preview[top-self.view_y:bottom-self.view_y, left-self.view_x:right-self.view_x] = self.mask_preview[top:bottom, left:right]
             except ValueError: # in case we are out of image limits, in this case keep empty mask
                 pass
             
@@ -1250,10 +1254,10 @@ class SegmentationApp(ctk.CTk):
             overlay_prev = np.zeros((self.view_h, self.view_w, 4), np.uint8)
             if not self.mask_widgets[self.active_mask_id].hidden:
                 overlay_prev[cut_mask_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
-            self.sam_preview_pil = Image.fromarray(overlay_prev)
-            resized_prev = self.sam_preview_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
-            self.tk_sam_preview = ImageTk.PhotoImage(resized_prev)
-            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_sam_preview, tag="mask")
+            self.mask_preview_pil = Image.fromarray(overlay_prev)
+            resized_prev = self.mask_preview_pil.resize((self.canvas.winfo_width(), self.canvas.winfo_height()), Image.NEAREST)
+            self.tk_mask_preview = ImageTk.PhotoImage(resized_prev)
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_mask_preview, tag="mask")
 
             # raise back SAM multipoints if any
             self.display_wand_multipoints()
@@ -1300,7 +1304,7 @@ class SegmentationApp(ctk.CTk):
             if not self.mask_widgets[self.active_mask_id].hidden: # if active mask is hidden, skip computation
                 preview_alpha = max(min(int(self.mask_opacity + 0.35 * (255 - self.mask_opacity)), 255), 0)
                 overlay_prev = np.zeros((self.orig_h, self.orig_w, 4), np.uint8)
-                overlay_prev[self.sam_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
+                overlay_prev[self.mask_preview] = [*self.mask_colors[self.active_mask_id], preview_alpha]
                 blended = Image.alpha_composite(blended, Image.fromarray(overlay_prev))
         self.blended = blended.convert("RGB")
     
@@ -1899,7 +1903,7 @@ class SegmentationApp(ctk.CTk):
             self.mask_orig = mask
             self.mask_locked = np.full(self.mask_orig.shape, False)
             self.update_lock()
-        self.sam_preview = np.full(self.mask_orig.shape, False)
+        self.mask_preview = np.full(self.mask_orig.shape, False)
         
 
 
@@ -2199,8 +2203,8 @@ class SegmentationApp(ctk.CTk):
                 if unique_colors:
                     self.change_mask(target_id=1)
         
-        # prepare empty mask with same size for SAM preview
-        self.sam_preview = np.full(self.mask_orig.shape, False)
+        # prepare empty preview mask with same size
+        self.mask_preview = np.full(self.mask_orig.shape, False)
 
         self.toggle_all_masks_hide(set_hide=False, enabled=True)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
@@ -2419,7 +2423,6 @@ class SegmentationApp(ctk.CTk):
         if not any(self.tool_active[tool] for tool in self.tool_active):
             self._pan_start = (e.x, e.y, self.view_x, self.view_y)
             return
-
         
         # Check position
         x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
@@ -2430,11 +2433,13 @@ class SegmentationApp(ctk.CTk):
         else:
             check_inside_image = True
         
-        if self.tool_active["bbox"] and self.mid_pressed == False:
-            if self.bbox[0] is None:
-                self.bbox[0] = (e.x,e.y)
+        if self.tool_active["bbox"] and not self.mid_pressed:
+            if self.bbox_start is None:
+                x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+                y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+                self.bbox_start = (x, y)
             return
-
+        
         if self.tool_active["smooth"] and check_inside_image:
             x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
@@ -2491,53 +2496,22 @@ class SegmentationApp(ctk.CTk):
         self.draw_brush_preview(e)
 
     def on_canvas_left_release(self, e):
-        if self.tool_active["bbox"] and self.bbox[0] is not None:
-            if self.bbox[1] is None:
-                self.bbox[1] = (e.x,e.y)
-            
-            # Define the brush drag
-            x0 = int((self.bbox[0][0])*(self.view_w/self.canvas.winfo_width())) + self.view_x
-            y0 = int((self.bbox[0][1])*(self.view_h/self.canvas.winfo_height())) + self.view_y
-            x1 = int((self.bbox[1][0])*(self.view_w/self.canvas.winfo_width())) + self.view_x
-            y1 = int((self.bbox[1][1])*(self.view_h/self.canvas.winfo_height())) + self.view_y
-            
-
-            self.reset_bbox()
-
-            #self.push_undo()            
-            self.bbox_at([[x0, y0], [x1 ,y1]])
-
+        shift_pressed = (e.state & 0x0001) != 0 or self.b3_released
+        
+        if self.tool_active["bbox"] and self.bbox_start is not None:
+            x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+            y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+            self.bbox_at([self.bbox_start, (x, y)], add=not shift_pressed)
+        
+        self.b3_released = False
         self.last_brush_pos = None
         self._pan_start = None
         self._drag_counter = 0
         self.update_display(update_image=True)
         self.draw_brush_preview(e)
-    
-    def bbox_at(self, p):
-        for i in range(len(p)):
-            if p[i][0] < 0:
-                p[i][0] = 0
 
-            if p[i][0] > self.mask_orig.shape[0]:
-                p[i][0] = self.mask_orig.shape[0]
 
-            if p[i][1] < 0:
-                p[i][1] = 0
 
-            if p[i][1] > self.mask_orig.shape[1]:
-                p[i][1] = self.mask_orig.shape[1]
-
-        self.push_undo()
-
-        p = np.array(p)    
-        x0, y0 = p.min(axis=0)
-        x1, y1 = p.max(axis=0)
-        
-        self.mask_orig[y0:y1, x0:x1] = self.active_mask_id
-
-    def reset_bbox(self):
-        self.bbox = [None, None]
-        self.canvas.delete("bbox")
         
 
     def on_canvas_right(self, e):
@@ -2550,6 +2524,7 @@ class SegmentationApp(ctk.CTk):
 
     def on_canvas_right_release(self, e):
         self.b3_pressed = False
+        self.b3_released = True
         self.on_canvas_left_release(e)
 
     def on_canvas_drag(self, e):
@@ -2573,7 +2548,7 @@ class SegmentationApp(ctk.CTk):
                 self.update_preview_frame()
             return
         
-        # Check if the brush is not active (only draggable tool)
+        # Check if any draggable tool is active, return if not
         # TODO implement other tools
         if not (self.tool_active["brush"] or self.tool_active["eraser"] or self.tool_active["bbox"]):
             return
@@ -2582,8 +2557,9 @@ class SegmentationApp(ctk.CTk):
         x1 = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
         y1 = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
         
-        if(self.tool_active['bbox']):
+        if self.tool_active['bbox']:
             self.draw_bbox_preview(e)
+            self.draw_brush_preview(e)
             return
 
         if not hasattr(self, "_prev_brush_pos") or self._prev_brush_pos is None:
@@ -2734,7 +2710,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom in).
         '''
         # Check if an image is loaded
-        if self.image_orig is None or self.bbox[0] is not None:
+        if self.image_orig is None:
             return
         
         # change status while zoom function is inefficient, so that user is aware
@@ -2776,7 +2752,7 @@ class SegmentationApp(ctk.CTk):
         Adjust zoom level (zoom out).
         '''
         # Check if an image is loaded
-        if self.image_orig is None or self.bbox[0] is not None:
+        if self.image_orig is None:
             return
         
         # change status while zoom function is inefficient, so that user is aware
@@ -2906,7 +2882,7 @@ class SegmentationApp(ctk.CTk):
                 theta = np.radians(self.brush_rot)  
                 dx_rot = dx * np.cos(theta) + dy * np.sin(theta)
                 dy_rot = -dx * np.sin(theta) + dy * np.cos(theta)
-                effective_mask_area = (np.abs(dx_rot) <= r // self.brush_line_ratio) & (np.abs(dy_rot) <= r ) # TODO check rotation, something wrong with line
+                effective_mask_area = (np.abs(dx_rot) <= r // self.brush_line_ratio) & (np.abs(dy_rot) <= r) # TODO check rotation, something wrong with line
 
         # Slice of the mask corresponding to the bounding box
         mask_area = self.mask_orig[y0:y1, x0:x1]
@@ -2928,13 +2904,6 @@ class SegmentationApp(ctk.CTk):
         # Mark mask as modified for later saving or GUI update
         self.set_modified(True)
 
-    def draw_bbox_preview(self, e):
-        if self.mask_orig is None or self.active_mask_id is None or self.bbox[0] is None:
-            return
-        self.canvas.delete("bbox")
-        outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
-        self.canvas.create_rectangle(self.bbox[0][0], self.bbox[0][1], e.x, e.y, fill=outline_color, outline='', width=0, tag="bbox")
-
     def draw_brush_preview(self, e):
         '''
         Draws a semi-transparent mask contour on the canvas to show the brush size
@@ -2951,11 +2920,30 @@ class SegmentationApp(ctk.CTk):
     def _draw_brush_preview(self, x, y, shift_pressed=False):
         self.canvas.delete("brush")
         
-        if not (self.tool_active["brush"] or self.tool_active["eraser"]):
+        if not (self.tool_active["brush"] or self.tool_active["eraser"] or self.tool_active["bbox"]):
+            return
+        
+        outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
+        
+        if self.tool_active["bbox"]:
+            self.canvas.create_line(x-1, y+5, x-1, y+15, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x, y+4, x, y+15, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x+1, y+5, x+1, y+15, fill=outline_color, width=1, tag="brush")
+            
+            self.canvas.create_line(x-1, y-5, x-1, y-15, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x, y-4, x, y-15, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x+1, y-5, x+1, y-15, fill=outline_color, width=1, tag="brush")
+            
+            self.canvas.create_line(x+5, y-1, x+15, y-1, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x+4, y, x+15, y, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x+5, y+1, x+15, y+1, fill=outline_color, width=1, tag="brush")
+            
+            self.canvas.create_line(x-5, y-1, x-15, y-1, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x-4, y, x-15, y, fill=outline_color, width=1, tag="brush")
+            self.canvas.create_line(x-5, y+1, x-15, y+1, fill=outline_color, width=1, tag="brush")
             return
 
         r = int(self.brush_size * self.zoom / 2)
-        outline_color = "#" + "".join([f"{c:02x}" for c in self.mask_colors[self.active_mask_id]])
         dash = (5,10) if (shift_pressed or self.tool_active["eraser"]) else None
 
         match self.brush_shape:
@@ -2990,6 +2978,48 @@ class SegmentationApp(ctk.CTk):
             xr, yr = x*c - y*s + cx, x*s + y*c + cy
             out.extend([xr, yr])
         return out
+    
+    # RECTANGULAR MASK
+    def bbox_at(self, p, add=True):
+
+        x0 = max(0, min(p[0][0], self.orig_w))
+        y0 = max(0, min(p[0][1], self.orig_h))
+        x1 = max(0, min(p[1][0], self.orig_w))
+        y1 = max(0, min(p[1][1], self.orig_h))
+        
+        region = np.full(self.mask_orig.shape, False)
+        region[min(y0, y1):max(y0, y1), min(x0, x1):max(x0, x1)] = True
+
+        self.push_undo()
+
+        if add:
+            self.mask_orig[region & (~self.mask_locked)] = self.active_mask_id
+        else:
+            self.mask_orig[region & (self.mask_orig==self.active_mask_id)] = 0
+        
+        self.mask_preview[:] = False
+        self.bbox_start = None
+        
+        self.set_modified(True)
+        # Update lock status
+        self.mask_locked[self.mask_orig == self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
+        self.mask_locked[self.mask_orig == 0] = False
+        self.update_display(update_image=False)
+        
+        
+    def draw_bbox_preview(self, e):
+        if self.bbox_start is None:
+            return
+        self.mask_preview[:] = False
+        x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        
+        x0 = max(0, min(self.bbox_start[0], self.orig_w))
+        y0 = max(0, min(self.bbox_start[1], self.orig_h))
+        x1 = max(0, min(x, self.orig_w))
+        y1 = max(0, min(y, self.orig_h))
+        self.mask_preview[min(y0, y1):max(y0, y1), min(x0, x1):max(x0, x1)] = True
+        self.update_display(update_image=False, update_blended=False)
     
     # SAM
     def sam_add_point(self, e, add=True, multipoint=False):
@@ -3033,7 +3063,7 @@ class SegmentationApp(ctk.CTk):
                                   parameters={"threshold": self.wand_threshold},
                                   model=self.sam,
                                   multipoint=multipoint)
-        self.sam_preview[mask & (~self.mask_locked)] = True
+        self.mask_preview[mask & (~self.mask_locked)] = True
         
         if multipoint: # to show preview
             self.update_display(update_image=False)
@@ -3041,7 +3071,7 @@ class SegmentationApp(ctk.CTk):
 
     def sam_apply(self, add=True, cancel=False):
         """
-        Apply the mask in SAM_preview to definitive mask, and empty SAM points
+        Apply the mask in mask_preview to definitive mask, and empty SAM points
         and labels lists.
         
         If cancel=True, don't apply the computed mask and only empty SAM infos.
@@ -3051,11 +3081,11 @@ class SegmentationApp(ctk.CTk):
         if not cancel:
             self.push_undo()
             if add:
-                self.mask_orig[self.sam_preview] = self.active_mask_id
+                self.mask_orig[self.mask_preview] = self.active_mask_id
             else:
-                self.mask_orig[self.sam_preview & (self.mask_orig==self.active_mask_id)] = 0
+                self.mask_orig[self.mask_preview & (self.mask_orig==self.active_mask_id)] = 0
             self.set_modified(True)
-        self.sam_preview = np.full(self.mask_orig.shape, False) # reset preview
+        self.mask_preview = np.full(self.mask_orig.shape, False) # reset preview
         self.sam_points = []
         self.sam_pt_labels = []
         self.canvas.delete("sam_pt")
