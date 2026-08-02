@@ -163,6 +163,7 @@ Only one tool can be selected at a time. Clicking on the active tool button (or 
 | ----------------------- | ---------------------------------- | ------------ | -------------------------- | ----------------------------- |
 | ![Brush](images/doc/buttons/brush.png) **Brush**               | Paint or erase manually            | <kbd>B</kbd> | Paint                      | Erase                         |
 | ![Eraser](images/doc/buttons/eraser.png) **Eraser**               | Erase manually            | <kbd>E</kbd> | Erase                      | –                         |
+| ![Rectangular mask](images/doc/buttons/bbox.png) **Rectangular mask**               | Add/remove rectangular area to mask            | <kbd>R</kbd> | Add to mask                      | Remove from mask                         |
 | ![Magic wand](images/doc/buttons/wand.png) **Magic wand**          | AI-assisted segmentation (SAM)     | <kbd>M</kbd> | Add region                 | Remove region                 |
 | ![Multipoint magic wand](images/doc/buttons/wand_multi.png) **Multipoint magic wand**          | AI-assisted segmentation (SAM)     | – | Add positive point                 | Add negative point                 |
 | ![Cut](images/doc/buttons/cut.png) **Cut** | Select/remove connected areas      | <kbd>C</kbd> | Remove connected component | Keep only connected component |
@@ -253,7 +254,8 @@ The multipoint magic wand is also provided as a standalone tool. In this case, t
 
 ### Potential additional features
 - [x] Different brush shapes (square)
-- [ ] Rectangle/polygonal "add to mask" tool
+- [x] Rectangle "add to mask" tool
+- [ ] Polygonal "add to mask" tool
 - [ ] For polygonal mask: add points at left click, Enter confirm + Esc cancel, preview (like multipoint wand ― actually use the same preview layer to display preview mask); add switch for smooth (e.g. Bézier) curves between points, click near endpoint to close path, next click depends on: if path is open, add next point; if path is closed, add new point between the two consecutive points that minimize sum of distances between them and new point
 - [ ] (WIP) Define plugins for different features to mantain the system lightweight and make it adaptable to user experience
 - [ ] Add button "invert mask"
