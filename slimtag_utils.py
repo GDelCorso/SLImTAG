@@ -863,16 +863,28 @@ class ProportionalDropdownMenu(CustomDropdownMenu):
                          separator_color=separator_color,
                          **kwargs)
         self._stored_options = []
+    
+    # add class to be able to enable/disable menu items
+    class MenuItem:
+        def __init__(self):
+            self._button = None
+    
+        def configure(self, **kwargs):
+            if self._button is not None:
+                self._button.configure(**kwargs)
 
     def add_option(self, option, command=None, accelerator=None, tabs=None, state="normal"):
+        handle = self.MenuItem()
         self._stored_options.append({
             "type": "option",
             "text": option,
             "command": command,
             "shortcut": accelerator,
             "tabs": tabs,
-            "state": state
+            "state": state,
+            "handle": handle
         })
+        return handle
     
     def add_separator(self):
         self._stored_options.append({
@@ -914,5 +926,8 @@ class ProportionalDropdownMenu(CustomDropdownMenu):
             
             if btn:
                 btn.configure(anchor="w", state=opt['state'])
-                
+            
+            handle = opt["handle"]
+            handle._button = btn
+            
         self._stored_options.clear()
