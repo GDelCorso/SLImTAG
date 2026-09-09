@@ -1644,8 +1644,11 @@ class SegmentationApp(ctk.CTk):
             self.sam_apply(cancel=True)
             if self.sam_bind_enter is not None:
                 self.unbind("<Return>", self.sam_bind_enter)
+                self.sam_bind_enter = None
+                
             if self.sam_bind_esc is not None:
                 self.unbind("<Escape>", self.sam_bind_esc)
+                self.sam_bind_esc = None
     
     #%% UNDO
     def push_undo(self):
@@ -2613,11 +2616,14 @@ class SegmentationApp(ctk.CTk):
             self.connected_component_click(e, remove_only=(self.tool_active["cut"] and not shift_pressed))
             return
         
-        if self.tool_active["fill"] and check_inside_image:
+        if not check_inside_image:
+            return
+
+        if self.tool_active["fill"]:
             self.fill_connected_component(e)
             return
         
-        if self.tool_active["wand"] and check_inside_image: # TODO implement with match
+        if self.tool_active["wand"]: # TODO implement with match
             if self.wand_model_menu.get() == "Region growing":
                 self.region_growing(e)
             elif self.wand_model_menu.get() in self.available_sam_models:
@@ -2626,7 +2632,7 @@ class SegmentationApp(ctk.CTk):
                 return
             return
         
-        if self.tool_active["wand_multi"] and check_inside_image: # TODO implement with match
+        if self.tool_active["wand_multi"]: # TODO implement with match
             if self.wand_model_menu.get() == "Region growing":
                 MultiButtonDialog(self, message="Multipoint magic wand currently implemented for SAM models only", buttons=[("OK", None)])
                 return
@@ -2636,7 +2642,7 @@ class SegmentationApp(ctk.CTk):
                 return
             return
         
-        if (self.tool_active["brush"] or self.tool_active["eraser"]) and check_inside_image:
+        if (self.tool_active["brush"] or self.tool_active["eraser"]):
             x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
             self.push_undo()
