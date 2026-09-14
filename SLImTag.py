@@ -2589,15 +2589,8 @@ class SegmentationApp(ctk.CTk):
             self._pan_start = (e.x, e.y, self.view_x, self.view_y)
             return
         
-        # Check position
-        x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
-        y_check = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
-        
-        if (x_check < 0) or (x_check > self.orig_w) or (y_check < 0) or (y_check > self.orig_h):
-            check_inside_image = False
-        else:
-            check_inside_image = True
-        
+        # "bbox" tool works also when the starting point is outside the image
+        # so the "we are outside the image" return condition is checked after this
         if self.tool_active["bbox"] and not self.mid_pressed:
             if self.bbox_start is None:
                 x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
@@ -2605,20 +2598,23 @@ class SegmentationApp(ctk.CTk):
                 self.bbox_start = (x, y)
             return
         
-        if self.tool_active["smooth"] and check_inside_image:
+        # Check position
+        x_check = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
+        y_check = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
+        if (x_check < 0) or (x_check > self.orig_w) or (y_check < 0) or (y_check > self.orig_h):
+            return
+        
+        if self.tool_active["smooth"]:
             x = int((e.x)*(self.view_w/self.canvas.winfo_width())) + self.view_x
             y = int((e.y)*(self.view_h/self.canvas.winfo_height())) + self.view_y
             op = "erosion" if shift_pressed else "dilation"
             self.apply_smoothing(y, x, operation=op)
             return
-    
-        if (self.tool_active["cut"] or self.tool_active["clean"]) and check_inside_image:
+        
+        if (self.tool_active["cut"] or self.tool_active["clean"]):
             self.connected_component_click(e, remove_only=(self.tool_active["cut"] and not shift_pressed))
             return
         
-        if not check_inside_image:
-            return
-
         if self.tool_active["fill"]:
             self.fill_connected_component(e)
             return
@@ -2650,7 +2646,6 @@ class SegmentationApp(ctk.CTk):
             self.update_display(update_image=False)
             self.draw_brush_preview(e)
             return
-
         
     def on_canvas_mid(self, e):
         self.mid_pressed = True
@@ -3203,6 +3198,7 @@ class SegmentationApp(ctk.CTk):
         if multipoint:
             self.sam_pt_labels.append(1 if add else 0)
             self.sam_compute(multipoint=True)
+            self.toggle_prev_next("disabled") # disable moving between images in folder if wand_multipoint
         else:
             self.sam_pt_labels.append(1)
             self.sam_compute(multipoint=False)
@@ -3252,6 +3248,7 @@ class SegmentationApp(ctk.CTk):
         self.sam_points = []
         self.sam_pt_labels = []
         self.canvas.delete("sam_pt")
+        self.toggle_prev_next("normal") # activate again moving between images
         # Update locked status (we don't use self.update_lock() for performances)
         self.mask_locked[self.mask_orig==self.active_mask_id] = self.mask_widgets[self.active_mask_id].locked
         self.mask_locked[self.mask_orig==0] = False
