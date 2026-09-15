@@ -1689,9 +1689,14 @@ class SegmentationApp(ctk.CTk):
         if not self.image_is_loaded():
             return
         
-        self.deactivate_tools()
+        # prevent adding new masks while using multipoint wand
+        if len(self.sam_points) > 0:
+            return
+        
         if len(self.mask_labels) >= self.slimtag_config["mask"]["max_masks"]:
             return
+        
+        self.deactivate_tools()
         
         default_color = [tuple(c) for c in self.slimtag_config["mask"]["default_mask_colors"] if tuple(c) not in self.mask_colors.values()][0] # get first non-used color
         color = None
@@ -1835,10 +1840,14 @@ class SegmentationApp(ctk.CTk):
         if not self.image_is_loaded():
             return
         
-        self.deactivate_tools()
-        
         if self.mask_orig is None:
             return
+        
+        # prevent clearing masks while using multipoint wand
+        if len(self.sam_points) > 0:
+            return
+        
+        self.deactivate_tools()
         
         self.push_undo()
         self.mask_locked[self.mask_orig == mid] = False # free locks
