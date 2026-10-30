@@ -2268,6 +2268,10 @@ class SegmentationApp(ctk.CTk):
         else:
             
             img = Image.open(p)
+            try:
+                png_text_metadata = img.text.copy() # img.convert("RGB") removes the PNG-specific 'text' attribute
+            except AttributeError: # just for safety
+                png_text_metadata = {}
             
             # CASE 1: Indexed PNG
             if img.mode == "P":
@@ -2277,7 +2281,7 @@ class SegmentationApp(ctk.CTk):
                 labels = labels[labels != 0][:self.slimtag_config["mask"]["max_masks"]]
                 palette = img.getpalette()
                 try:
-                    names = json.loads(img.text["labels"])
+                    names = json.loads(png_text_metadata["labels"])
                 except KeyError:
                     names = {str(l): f"mask_{l}" for l in labels.tolist()}
                     
@@ -2315,7 +2319,7 @@ class SegmentationApp(ctk.CTk):
                             break
     
                 try:
-                    names = json.loads(img.text["labels"])
+                    names = json.loads(png_text_metadata["labels"])
                 except KeyError:
                     names = {str(l+1): f"mask_{l+1}" for l in range(len(unique_colors))}
                 
