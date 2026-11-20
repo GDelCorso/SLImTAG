@@ -53,6 +53,9 @@ from slimtag_color_utils import rgb_to_hex, hex_to_rgb
 from slimtag_bayesian import OptimizerDialog
 import slimtag_wand as wand
 
+# Custom save/load functions for microscope slides
+import raman
+
 # Asynchronous threading import
 import threading
 
@@ -329,6 +332,9 @@ class SegmentationApp(ctk.CTk):
         self.switch_computed_magic_wand = False     # True if SAM is loaded
         self.thread = None                          # Threading variable
         self.lock = threading.Lock()              # To protect shared varaibles
+        
+        # custom variables for raman branch
+        self.raman_csv_backup = None
 
         splash.step(10)
         
@@ -2040,6 +2046,8 @@ class SegmentationApp(ctk.CTk):
         img = Image.open(p).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
         self.load_image(img, change_canvas="default")
         
+        self.raman_csv_backup = raman.check_report(self.path_original_image)
+        
         self.update_title()
         
         # reset history
@@ -2125,6 +2133,8 @@ class SegmentationApp(ctk.CTk):
         img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
         self.load_image(img, change_canvas="multi" if len(self.list_images) > 1 else "default")
         
+        self.raman_csv_backup = raman.check_report(self.path_original_image)
+        
         self.update_title()
         
         # reset history
@@ -2179,6 +2189,8 @@ class SegmentationApp(ctk.CTk):
 
             img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
             self.load_image(img, mask=arr) # don't change canvas, assume "multi" already raised, and don't change labels--just add temp mask if it exists
+            
+            self.raman_csv_backup = raman.check_report(self.path_original_image)
             
             self.update_title()
             
@@ -2432,6 +2444,15 @@ class SegmentationApp(ctk.CTk):
         # otherwise let the function that calls save_mask handle it
         if path is None:
             self.set_modified(False, self.current_img_idx)
+        
+        # save slso csv and preview
+        if path is None:
+            if self.raman_csv_backup is not None:
+                shutil.move(os.path.splitext(self.path_original_image)[0]+".csv",
+                            os.path.splitext(self.path_original_image)[0]+f"_backup_{self.raman_csv_backup+1}.csv")
+                self.raman_csv_backup = None
+            raman.save_report(self.mask_orig, self.mask_labels, os.path.splitext(self.path_original_image)[0]+".csv")
+            raman.save_preview()
         
         if switch_fast and (not disable_next) and self.slimtag_config["folder_mgmt"]["next_on_save"]:
             self.next_image()
