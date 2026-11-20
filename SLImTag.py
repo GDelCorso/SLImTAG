@@ -904,7 +904,8 @@ class SegmentationApp(ctk.CTk):
         
         #print("Loading SAM model")
         
-        self.status_sam_label.configure(text="(Loading image into SAM...)")
+        if self.slimtag_config["modules"]["sam"]:
+            self.status_sam_label.configure(text="(Loading image into SAM...)")
         
         self.toggle_prev_next("disabled")
         #  Thread-safe upload of shared variable
