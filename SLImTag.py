@@ -1708,7 +1708,7 @@ class SegmentationApp(ctk.CTk):
             # Ask user for mask name
             color_in_use = True
             while color_in_use:
-                name, color = MaskEditDialog(self, title="New mask", initial_color=rgb_to_hex(default_color), mask_name=f"mask_{mid}").get()
+                name, color = MaskEditDialog(self, title="New mask", initial_color=rgb_to_hex(default_color), mask_name=f"Marker_{mid}").get()
                 if color is not None and hex_to_rgb(color) in self.mask_colors.values():
                     MultiButtonDialog(self, message=f"Color {color} already in use. Please choose another one.", buttons=(("OK", None),))
                 else:
@@ -2045,7 +2045,7 @@ class SegmentationApp(ctk.CTk):
         self.undo_stack.clear()
         
         if add_mask:
-            self.add_mask("mask_1")
+            self.add_mask("Marker_1")
 
         self.toggle_all_masks_hide(set_hide=False, enabled=True, update_display=False)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
@@ -2130,7 +2130,7 @@ class SegmentationApp(ctk.CTk):
         self.undo_stack.clear()
         
         if add_mask:
-            self.add_mask("mask_1")
+            self.add_mask("Marker_1")
         
         self.toggle_all_masks_hide(set_hide=False, enabled=True, update_display=False)
         self.toggle_all_masks_lock(set_lock=False, enabled=True)
@@ -2283,10 +2283,10 @@ class SegmentationApp(ctk.CTk):
                 try:
                     names = json.loads(png_text_metadata["labels"])
                 except KeyError:
-                    names = {str(l): f"mask_{l}" for l in labels.tolist()}
+                    names = {str(l): f"Marker_{l}" for l in labels.tolist()}
                     
                 for l in labels.tolist():
-                    self.mask_labels[l] = names[str(l)]#f"mask_{l}"
+                    self.mask_labels[l] = names[str(l)]#f"Marker_{l}"
                     idx = l * 3
                     self.mask_colors[l] = tuple(palette[idx:idx+3])
                     self.mask_widgets[l] = self.create_mask_widget(l)
@@ -2321,12 +2321,12 @@ class SegmentationApp(ctk.CTk):
                 try:
                     names = json.loads(png_text_metadata["labels"])
                 except KeyError:
-                    names = {str(l+1): f"mask_{l+1}" for l in range(len(unique_colors))}
+                    names = {str(l+1): f"Marker_{l+1}" for l in range(len(unique_colors))}
                 
                 mask = np.zeros((h, w), np.uint8)
                 for i, color in enumerate(unique_colors, 1):
                     mask[np.all(arr == color, axis=-1)] = i
-                    self.mask_labels[i] = names[str(i)]#f"mask_{i}"
+                    self.mask_labels[i] = names[str(i)]#f"Marker_{i}"
                     self.mask_colors[i] = color
                     self.mask_widgets[i] = self.create_mask_widget(i)
                     self.mask_widgets[i].pack(fill="x", expand=True)
@@ -2572,7 +2572,7 @@ class SegmentationApp(ctk.CTk):
         self.undo_stack.clear()
         
         if add_mask:
-            self.add_mask("mask_1")
+            self.add_mask("Marker_1")
 
         
         self.show_preview_frame("image")
