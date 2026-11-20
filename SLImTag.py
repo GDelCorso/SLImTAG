@@ -2452,7 +2452,9 @@ class SegmentationApp(ctk.CTk):
                             os.path.splitext(self.path_original_image)[0]+f"_backup_{self.raman_csv_backup+1}.csv")
                 self.raman_csv_backup = None
             raman.save_report(self.mask_orig, self.mask_labels, os.path.splitext(self.path_original_image)[0]+".csv")
-            raman.save_preview()
+            raman.save_preview(self.image_orig,
+                               os.path.splitext(self.path_original_image)[0]+".csv",
+                               os.path.splitext(self.path_original_image)[0]+"_mask_preview.png")
         
         if switch_fast and (not disable_next) and self.slimtag_config["folder_mgmt"]["next_on_save"]:
             self.next_image()

@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 import csv
 from scipy import ndimage
+from PIL import ImageDraw, ImageFont
 
 def check_report(path_original_image):
     """
@@ -102,5 +103,26 @@ def save_report(mask, label_names, csv_path):
             del selected, labels
     return None
 
-def save_preview():
-    pass
+def save_preview(pil_image, csv_path, save_path):
+    """
+    Create mask preview with bounding boxes.
+    """
+    img = pil_image.copy() # just for safety
+    imgdraw = ImageDraw.Draw(img)
+    drawcolor = (254, 223, 0)
+    font = ImageFont.load_default(size=24)
+    with open(csv_path, "r", newline="") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            xmin = int(row["x top left (px)"])
+            ymin = int(row["y top left (px)"])
+            xmax = int(row["x bottom right (px)"])
+            ymax = int(row["y bottom right (px)"])
+            imgdraw.rectangle([(xmin, ymin), (xmax, ymax)], outline='black', width=1)
+            imgdraw.rectangle([(xmin+1, ymin+1), (xmax-1, ymax-1)], outline=drawcolor, width=2)
+            imgdraw.rectangle([(xmin+3, ymin+3), (xmax-3, ymax-3)], outline='black', width=1)
+            imgdraw.text((xmin + 4, ymin + 4), f"[{row['ID']}] {row['label']}",
+                         font=font, fill=drawcolor, anchor="lt",
+                         stroke_fill='black', stroke_width=2)
+    img.save(save_path)
+    return None
