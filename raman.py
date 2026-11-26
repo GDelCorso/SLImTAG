@@ -64,7 +64,7 @@ def save_report(mask, label_names, csv_path):
                   "x middle (px)", "y middle (px)",
                   "x bottom right (px)", "y bottom right (px)"]
     global_id = 0
-    mask_w, mask_h = mask.shape
+    mask_h, mask_w = mask.shape
     with open(csv_path, "w", newline="") as outfile:
         writer = csv.DictWriter(outfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -119,10 +119,29 @@ def save_preview(pil_image, csv_path, save_path):
             xmax = int(row["x bottom right (px)"])
             ymax = int(row["y bottom right (px)"])
             imgdraw.rectangle([(xmin, ymin), (xmax, ymax)], outline='black', width=1)
-            imgdraw.rectangle([(xmin+1, ymin+1), (xmax-1, ymax-1)], outline=drawcolor, width=2)
-            imgdraw.rectangle([(xmin+3, ymin+3), (xmax-3, ymax-3)], outline='black', width=1)
-            imgdraw.text((xmin + 4, ymin + 4), f"[{row['ID']}] {row['label']}",
-                         font=font, fill=drawcolor, anchor="lt",
+            try:
+                imgdraw.rectangle([(xmin+1, ymin+1), (xmax-1, ymax-1)], outline=drawcolor, width=2)
+            except ValueError: # for small areas, overwrite outer border with draw color
+                imgdraw.rectangle([(xmin, ymin), (xmax, ymax)], outline=drawcolor, width=1)
+            try:
+                imgdraw.rectangle([(xmin+3, ymin+3), (xmax-3, ymax-3)], outline='black', width=1)
+            except ValueError: # for small areas do not add inner border
+                pass
+            # determine label position depending on the box position
+            if float(row["x middle (%)"]) <= 0.5:
+                xlabel = xmin + 4
+                anchor = "l"
+            else:
+                xlabel = xmax - 4
+                anchor = "r"
+            if float(row["y middle (%)"]) <= 0.5:
+                ylabel = ymin + 4
+                anchor += "t"
+            else:
+                ylabel = ymax - 4
+                anchor += "b"
+            imgdraw.text((xlabel, ylabel), f"[{row['ID']}] {row['label']}",
+                         font=font, fill=drawcolor, anchor=anchor,
                          stroke_fill='black', stroke_width=2)
     img.save(save_path)
     return None

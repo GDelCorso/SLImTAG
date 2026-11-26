@@ -334,7 +334,7 @@ class SegmentationApp(ctk.CTk):
         self.lock = threading.Lock()              # To protect shared varaibles
         
         # custom variables for raman branch
-        self.raman_csv_backup = None
+        self.raman_new_image = False
 
         splash.step(10)
         
@@ -1992,6 +1992,9 @@ class SegmentationApp(ctk.CTk):
             self.view_w = self.canvas.winfo_width()
             self.view_h = self.canvas.winfo_height()
         
+        # raman: set new image to True to activate backup
+        self.raman_new_image = True
+        
         self.update_display(update_image=True)
         
         self.show_preview_frame("image")
@@ -2045,8 +2048,6 @@ class SegmentationApp(ctk.CTk):
         
         img = Image.open(p).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
         self.load_image(img, change_canvas="default")
-        
-        self.raman_csv_backup = raman.check_report(self.path_original_image)
         
         self.update_title()
         
@@ -2133,8 +2134,6 @@ class SegmentationApp(ctk.CTk):
         img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
         self.load_image(img, change_canvas="multi" if len(self.list_images) > 1 else "default")
         
-        self.raman_csv_backup = raman.check_report(self.path_original_image)
-        
         self.update_title()
         
         # reset history
@@ -2189,8 +2188,6 @@ class SegmentationApp(ctk.CTk):
 
             img = Image.open(self.path_original_image).convert("RGBA").convert("RGB") # explicit conversion to normalize RGBA images
             self.load_image(img, mask=arr) # don't change canvas, assume "multi" already raised, and don't change labels--just add temp mask if it exists
-            
-            self.raman_csv_backup = raman.check_report(self.path_original_image)
             
             self.update_title()
             
@@ -2445,16 +2442,20 @@ class SegmentationApp(ctk.CTk):
         if path is None:
             self.set_modified(False, self.current_img_idx)
         
-        # save slso csv and preview
-        if path is None:
-            if self.raman_csv_backup is not None:
-                shutil.move(os.path.splitext(self.path_original_image)[0]+".csv",
-                            os.path.splitext(self.path_original_image)[0]+f"_backup_{self.raman_csv_backup+1}.csv")
-                self.raman_csv_backup = None
-            raman.save_report(self.mask_orig, self.mask_labels, os.path.splitext(self.path_original_image)[0]+".csv")
-            raman.save_preview(self.image_orig,
-                               os.path.splitext(self.path_original_image)[0]+".csv",
-                               os.path.splitext(self.path_original_image)[0]+"_mask_preview.png")
+        # save csv with data for raman
+        # if this is the first time that the current mask is saved, check if a csv
+        # with the "right" name already exists, and in that case back it up
+        if self.raman_new_image:
+            backup_number = raman.check_report(p)
+            if backup_number is not None:
+                shutil.move(os.path.splitext(p)[0]+".csv",
+                            os.path.splitext(p)[0]+f"_backup_{backup_number+1}.csv")
+            self.raman_new_image = False # allow overwriting if no new image is loaded between saves
+        # now the old csv is backed up, we can create a new csv (or overwrite it in case no new images have been loaded)
+        raman.save_report(self.mask_orig, self.mask_labels, os.path.splitext(p)[0]+".csv")
+        raman.save_preview(self.image_orig,
+                           os.path.splitext(p)[0]+".csv",
+                           os.path.splitext(p)[0]+"_preview.png")
         
         if switch_fast and (not disable_next) and self.slimtag_config["folder_mgmt"]["next_on_save"]:
             self.next_image()
@@ -2474,8 +2475,24 @@ class SegmentationApp(ctk.CTk):
                 if i == self.current_img_idx:
                     self.save_mask(switch_fast=True, disable_next=True)
                 else:
-                    mask_name = os.path.splitext(os.path.basename(self.list_images[i]))[0] + ".png"
-                    shutil.copy(os.path.join(self.temp_masks_folder.name, mask_name), self.save_path_folder)
+                    mask_name = os.path.splitext(os.path.basename(self.list_images[i]))[0]
+                    try:
+                        shutil.copy(os.path.join(self.temp_masks_folder.name, mask_name+".png"), self.save_path_folder)
+                    except FileNotFoundError:
+                        pass
+                    backup_number = raman.check_report(os.path.join(self.save_path_folder, mask_name+".png"))
+                    if backup_number is not None:
+                        shutil.move(os.path.join(self.save_path_folder, mask_name+".csv"),
+                                    os.path.join(self.save_path_folder, mask_name+f"_backup_{backup_number+1}.csv")
+                                    )
+                    try:
+                        shutil.copy(os.path.join(self.temp_masks_folder.name, mask_name+".csv"), self.save_path_folder)
+                    except FileNotFoundError:
+                        pass
+                    try:
+                        shutil.copy(os.path.join(self.temp_masks_folder.name, mask_name+"_preview.png"), self.save_path_folder)
+                    except FileNotFoundError:
+                        pass
                 self.set_modified(False, i)
         
         self.update_title()
